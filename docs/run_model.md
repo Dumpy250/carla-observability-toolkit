@@ -23,7 +23,7 @@ Run ended unexpectedly due to error, disconnect, exception, or forced terminatio
 
 Once a run enters STOPPED or ABORTED, its state MUST NOT change.
 ## 2) State Machine (ASCII Diagram)
-![img.png](img.png)
+![State Machine Diagram](./img.png)
 ### Transition Rules
 
 - CREATED -> STARTED when:

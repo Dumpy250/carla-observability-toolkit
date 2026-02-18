@@ -3,6 +3,8 @@
 Schema version: v1  
 Target: CARLA Python API 0.10.0  
 
+**Decision:** v1 uses a “long” metric table (metric + value) to avoid schema churn as new metrics are added.
+
 ## Goals
 - Support multiple runs
 - Store time-series metrics + discrete events
@@ -28,18 +30,24 @@ Target: CARLA Python API 0.10.0
 ---
 
 ## Object: Run
+### Represents one simulation session.
+#### Required Fields
+| Field                | Type          | Description                    |
+| -------------------- | ------------- | ------------------------------ |
+| run_id               | string (UUID) | Unique identifier for this run |
+| schema_version       | string        | Must equal `"v1"`              |
+| carla.server_version | string        | CARLA server version           |
+| carla.client_version | string        | CARLA Python client version    |
+| carla.map_name       | string        | Map loaded during run          |
 
-### Required fields
-- `run_id` (string, uuid)
-- `schema_version` (string) = "v1"
-- `carla.server_version` (string)
-- `carla.client_version` (string)
-- `carla.map_name` (string)
 
-### Optional fields
-- `world_settings` (object)
-- `started_wall_time_utc_s` (float)
-- `tags` (object)
+#### Optional fields
+| Field                   | Type   | Description                      |
+| ----------------------- | ------ | -------------------------------- |
+| world_settings          | object | Snapshot of world settings       |
+| started_wall_time_utc_s | float  | UTC epoch seconds when run began |
+| tags                    | object | Arbitrary metadata tags          |
+
 
 Example:
 ```json
@@ -60,22 +68,30 @@ Example:
   "tags": { "purpose": "metrics-catalog-probe" }
 }
 ```
-# Object: MetricSample
-**Required fields**
-- run_id (string)
-- frame (int)
-- sim_time_s (float)
-- metric (string)
-- value (number|bool|string|object)
-- dtype (string)
+## Object: MetricSample
 
-# Optional fields
-- unit (string)
-- source (string)
-- actor_id (int)
-- sensor_id (int)
-- wall_time_utc_s (float)
-- tags (object)
+### Represents one metric value at a specific simulation frame.
+#### Required Fields
+| Field      | Type                            | Description                                                    |
+| ---------- | ------------------------------- | -------------------------------------------------------------- |
+| run_id     | string                          | Foreign key to Run                                             |
+| frame      | int                             | Simulation frame number (primary alignment key)                |
+| sim_time_s | float                           | Simulation elapsed seconds                                     |
+| metric     | string                          | Metric name (e.g. `"vehicle.speed"`)                           |
+| value      | number | bool | string | object | Metric value                                                   |
+| dtype      | string                          | Data type descriptor (`float`, `int`, `bool`, `vector3`, etc.) |
+
+
+#### Optional fields
+| Field           | Type   | Description                      |
+| --------------- | ------ | -------------------------------- |
+| unit            | string | Measurement unit (e.g., `"m/s"`) |
+| source          | string | CARLA API source method          |
+| actor_id        | int    | Actor associated with metric     |
+| sensor_id       | int    | Sensor actor id                  |
+| wall_time_utc_s | float  | Wall clock timestamp             |
+| tags            | object | Additional metadata              |
+
 
 Example:
 ```json
@@ -92,21 +108,27 @@ Example:
 }
 ```
 
-# Object: Event
-**Required fields**
-- run_id (string)
-- frame (int)
-- sim_time_s (float)
-- event_type (string)
-- payload (object)
+## Object: Event
 
-**Optional fields**
-- actor_id (int)
-- sensor_id (int)
-- other_actor_id (int)
-- intensity (float)
-- wall_time_utc_s (float)
-- tags (object)
+### Represents a discrete event (collision, lane invasion, lifecycle event).
+#### Required Fields
+| Field      | Type   | Description                      |
+| ---------- | ------ | -------------------------------- |
+| run_id     | string | Foreign key to Run               |
+| frame      | int    | Simulation frame                 |
+| sim_time_s | float  | Simulation time                  |
+| event_type | string | Event name (e.g., `"collision"`) |
+| payload    | object | Event-specific data              |
+
+#### Optional fields
+| Field           | Type   | Description          |
+| --------------- | ------ | -------------------- |
+| actor_id        | int    | Primary actor        |
+| sensor_id       | int    | Sensor actor         |
+| other_actor_id  | int    | Secondary actor      |
+| intensity       | float  | Event magnitude      |
+| wall_time_utc_s | float  | Wall clock timestamp |
+| tags            | object | Arbitrary metadata   |
 
 Example:
 ```json

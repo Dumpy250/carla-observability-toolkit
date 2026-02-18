@@ -72,14 +72,14 @@ Example:
 
 ### Represents one metric value at a specific simulation frame.
 #### Required Fields
-| Field      | Type                            | Description                                                    |
-| ---------- | ------------------------------- | -------------------------------------------------------------- |
-| run_id     | string                          | Foreign key to Run                                             |
-| frame      | int                             | Simulation frame number (primary alignment key)                |
-| sim_time_s | float                           | Simulation elapsed seconds                                     |
-| metric     | string                          | Metric name (e.g. `"vehicle.speed"`)                           |
-| value      | number | bool | string | object | Metric value                                                   |
-| dtype      | string                          | Data type descriptor (`float`, `int`, `bool`, `vector3`, etc.) |
+| Field      | Type                                  | Description                                                    |
+| ---------- | ------------------------------------- | -------------------------------------------------------------- |
+| run_id     | string                                | Foreign key to Run                                             |
+| frame      | int                                   | Simulation frame number (primary alignment key)                |
+| sim_time_s | float                                 | Simulation elapsed seconds                                     |
+| metric     | string                                | Metric name (e.g. `"vehicle.speed"`)                           |
+| value      | number, bool, string, or object       | Metric value                                                   |
+| dtype      | string                                | Data type descriptor (`float`, `int`, `bool`, `vector3`, etc.) |
 
 
 #### Optional fields

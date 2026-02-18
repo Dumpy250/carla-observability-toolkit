@@ -48,7 +48,6 @@ htmlcov/
 recordings/
 *.rec
 *.mp4
-*.png
 *.jpg
 *.npy
 *.csv

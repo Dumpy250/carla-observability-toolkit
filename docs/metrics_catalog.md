@@ -30,24 +30,24 @@ Bounding box extent represents half-dimensions of the actor in meters.
 
 (Actor = carla.Vehicle)
 
-| Metric                           | Units | Type  | Update   | Source                                   |   |                        |   |                          |
-| -------------------------------- | ----: | ----- | -------- | ---------------------------------------- | - | ---------------------- | - | ------------------------ |
-| vehicle.transform.location.x     |     m | float | per tick | `vehicle.get_transform().location.x`     |   |                        |   |                          |
-| vehicle.transform.location.y     |     m | float | per tick | `vehicle.get_transform().location.y`     |   |                        |   |                          |
-| vehicle.transform.location.z     |     m | float | per tick | `vehicle.get_transform().location.z`     |   |                        |   |                          |
-| vehicle.transform.rotation.pitch |   deg | float | per tick | `vehicle.get_transform().rotation.pitch` |   |                        |   |                          |
-| vehicle.transform.rotation.yaw   |   deg | float | per tick | `vehicle.get_transform().rotation.yaw`   |   |                        |   |                          |
-| vehicle.transform.rotation.roll  |   deg | float | per tick | `vehicle.get_transform().rotation.roll`  |   |                        |   |                          |
-| vehicle.velocity.x               |   m/s | float | per tick | `vehicle.get_velocity().x`               |   |                        |   |                          |
-| vehicle.velocity.y               |   m/s | float | per tick | `vehicle.get_velocity().y`               |   |                        |   |                          |
-| vehicle.velocity.z               |   m/s | float | per tick | `vehicle.get_velocity().z`               |   |                        |   |                          |
-| vehicle.speed                    |   m/s | float | per tick | `                                        |   | vehicle.get_velocity() |   | ` *(computed magnitude)* |
-| vehicle.acceleration.x           |  m/s² | float | per tick | `vehicle.get_acceleration().x`           |   |                        |   |                          |
-| vehicle.acceleration.y           |  m/s² | float | per tick | `vehicle.get_acceleration().y`           |   |                        |   |                          |
-| vehicle.acceleration.z           |  m/s² | float | per tick | `vehicle.get_acceleration().z`           |   |                        |   |                          |
-| vehicle.angular_velocity.x       | rad/s | float | per tick | `vehicle.get_angular_velocity().x`       |   |                        |   |                          |
-| vehicle.angular_velocity.y       | rad/s | float | per tick | `vehicle.get_angular_velocity().y`       |   |                        |   |                          |
-| vehicle.angular_velocity.z       | rad/s | float | per tick | `vehicle.get_angular_velocity().z`       |   |                        |   |                          |
+| Metric                           | Units | Type  | Update   | Source                                          |
+| -------------------------------- | ----: | ----- | -------- | ----------------------------------------------- |
+| vehicle.transform.location.x     |     m | float | per tick | `vehicle.get_transform().location.x`            |
+| vehicle.transform.location.y     |     m | float | per tick | `vehicle.get_transform().location.y`            |
+| vehicle.transform.location.z     |     m | float | per tick | `vehicle.get_transform().location.z`            |
+| vehicle.transform.rotation.pitch |   deg | float | per tick | `vehicle.get_transform().rotation.pitch`        |
+| vehicle.transform.rotation.yaw   |   deg | float | per tick | `vehicle.get_transform().rotation.yaw`          |
+| vehicle.transform.rotation.roll  |   deg | float | per tick | `vehicle.get_transform().rotation.roll`         |
+| vehicle.velocity.x               |   m/s | float | per tick | `vehicle.get_velocity().x`                      |
+| vehicle.velocity.y               |   m/s | float | per tick | `vehicle.get_velocity().y`                      |
+| vehicle.velocity.z               |   m/s | float | per tick | `vehicle.get_velocity().z`                      |
+| vehicle.speed                    |   m/s | float | per tick | `vehicle.get_velocity()` *(computed magnitude)* |
+| vehicle.acceleration.x           |  m/s² | float | per tick | `vehicle.get_acceleration().x`                  |
+| vehicle.acceleration.y           |  m/s² | float | per tick | `vehicle.get_acceleration().y`                  |
+| vehicle.acceleration.z           |  m/s² | float | per tick | `vehicle.get_acceleration().z`                  |
+| vehicle.angular_velocity.x       | rad/s | float | per tick | `vehicle.get_angular_velocity().x`              |
+| vehicle.angular_velocity.y       | rad/s | float | per tick | `vehicle.get_angular_velocity().y`              |
+| vehicle.angular_velocity.z       | rad/s | float | per tick | `vehicle.get_angular_velocity().z`              |
 
 
 ### 1.3 Control Inputs (Actor = `carla.Vehicle`)
@@ -151,13 +151,13 @@ Bounding box extent represents half-dimensions of the actor in meters.
 ## 3) Discrete Events (callbacks / lifecycle)
 
 ### 3.1 Collision Event (`carla.CollisionEvent`)
-| Field                        | Units | Type    | Source                 |   |                |   |                |
-| ---------------------------- | ----: | ------- | ---------------------- | - | -------------- | - | -------------- |
-| event.frame                  | frame | int     | `event.frame`          |   |                |   |                |
-| event.timestamp              |     s | float   | `event.timestamp`      |   |                |   |                |
-| event.other_actor_id         |     - | int     | `event.other_actor.id` |   |                |   |                |
-| event.normal_impulse.(x,y,z) |   N·s | vector3 | `event.normal_impulse` |   |                |   |                |
-| event.intensity              |   N·s | float   | `                      |   | normal_impulse |   | ` *(computed)* |
+| Field                        | Units | Type    | Source                                              |
+| ---------------------------- | ----: | ------- | --------------------------------------------------- |
+| event.frame                  | frame | int     | `event.frame`                                       |
+| event.timestamp              |     s | float   | `event.timestamp`                                   |
+| event.other_actor_id         |     - | int     | `event.other_actor.id`                              |
+| event.normal_impulse.(x,y,z) |   N·s | vector3 | `event.normal_impulse`                              |
+| event.intensity              |   N·s | float   | `event.normal_impulse` magnitude *(computed)* |
 
 
 ### 3.2 Lane Invasion Event (`carla.LaneInvasionEvent`)

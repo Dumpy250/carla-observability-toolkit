@@ -64,7 +64,7 @@ Example:
     "fixed_delta_seconds": null,
     "no_rendering_mode": false
   },
-  "started_wall_time_utc_s": 173xxxxxxx.x,
+  "started_wall_time_utc_s": 1735689600.5,
   "tags": { "purpose": "metrics-catalog-probe" }
 }
 ```

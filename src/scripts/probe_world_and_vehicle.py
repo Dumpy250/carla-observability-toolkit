@@ -27,8 +27,12 @@ def get_or_spawn_vehicle(world):
             continue
 
         # Let the simulator advance so the actor has a stable transform/physics state
+        settings = world.get_settings()
         for _ in range(3):
-            world.wait_for_tick()
+            if settings.synchronous_mode:
+                world.tick()
+            else:
+                world.wait_for_tick()
 
         # Re-fetch to ensure we have the fully-registered actor
         v2 = world.get_actor(v.id)
@@ -54,35 +58,41 @@ def main():
     vehicles = world.get_actors().filter("vehicle.*")
     print("vehicles(before):", len(vehicles))
 
-    v, spawned = get_or_spawn_vehicle(world)
-    print("vehicle.selected:", v.id, v.type_id, "| spawned:" , spawned)
-    print("vehicle.is_alive:", v.is_alive, "is_active:", v.is_active, "state:", v.actor_state)
-    print("vehicle.bounding_box.extent:", v.bounding_box.extent.x, v.bounding_box.extent.y, v.bounding_box.extent.z)
+    v = None
+    spawned = False
+    try:
+        v, spawned = get_or_spawn_vehicle(world)
+        print("vehicle.selected:", v.id, v.type_id, "| spawned:" , spawned)
+        print("vehicle.is_alive:", v.is_alive, "is_active:", v.is_active, "state:", v.actor_state)
+        print("vehicle.bounding_box.extent:", v.bounding_box.extent.x, v.bounding_box.extent.y, v.bounding_box.extent.z)
 
-    # Vehicle/Actor metrics
-    t = v.get_transform()
-    vel = v.get_velocity()
-    acc = v.get_acceleration()
-    ang = v.get_angular_velocity()
-    ctrl = v.get_control()
+        # Vehicle/Actor metrics
+        t = v.get_transform()
+        vel = v.get_velocity()
+        acc = v.get_acceleration()
+        ang = v.get_angular_velocity()
+        ctrl = v.get_control()
 
-    print("loc:", t.location.x, t.location.y, t.location.z)
-    print("rot:", t.rotation.pitch, t.rotation.yaw, t.rotation.roll)
-    print("speed(m/s):", vec_mag(vel))
-    print("acc(m/s^2):", vec_mag(acc))
-    print("ang(rad/s):", vec_mag(ang))
-    print("control:", ctrl.throttle, ctrl.steer, ctrl.brake)
-    print("vel_vec(m/s):", vel.x, vel.y, vel.z)
-    print("acc_vec(m/s^2):", acc.x, acc.y, acc.z)
-    print("ang_vec(rad/s):", ang.x, ang.y, ang.z)
+        print("loc:", t.location.x, t.location.y, t.location.z)
+        print("rot:", t.rotation.pitch, t.rotation.yaw, t.rotation.roll)
+        print("speed(m/s):", vec_mag(vel))
+        print("acc(m/s^2):", vec_mag(acc))
+        print("ang(rad/s):", vec_mag(ang))
+        print("control:", ctrl.throttle, ctrl.steer, ctrl.brake)
+        print("vel_vec(m/s):", vel.x, vel.y, vel.z)
+        print("acc_vec(m/s^2):", acc.x, acc.y, acc.z)
+        print("ang_vec(rad/s):", ang.x, ang.y, ang.z)
 
-    # Traffic light related
-    is_at = v.is_at_traffic_light()
-    print("is_at_traffic_light:", is_at)
-    if is_at:
-        state = v.get_traffic_light_state()
-        name = getattr(state, "name", None)
-        print("traffic_light_state:", name if name else state)
+        # Traffic light related
+        is_at = v.is_at_traffic_light()
+        print("is_at_traffic_light:", is_at)
+        if is_at:
+            state = v.get_traffic_light_state()
+            name = getattr(state, "name", None)
+            print("traffic_light_state:", name if name else state)
+    finally:
+        if spawned and v is not None and getattr(v, "is_alive", False):
+            v.destroy()
 
 if __name__ == "__main__":
     main()

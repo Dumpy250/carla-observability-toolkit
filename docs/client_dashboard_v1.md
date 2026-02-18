@@ -7,7 +7,7 @@
 - Clear alert visibility
 - Minimal cognitive load
 
-## Layout (ASCII Mockup)
+## Wireframe
 ![img.png](client_dashboard_v1.png)
 
 ## Section Breakdown

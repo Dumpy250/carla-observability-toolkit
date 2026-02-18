@@ -10,23 +10,23 @@
 
 ## Layout Hierarchy
 1. Run Control Layer (Top)
-- Run selector dropdown
-- Comparison toggle
-- Run metadata header
-This section controls context.
+  - Run selector dropdown
+  - Comparison toggle
+  - Run metadata header
+  This section controls context.
 
 2. Analysis Layer (Middle)
-- Primary time-series chart
-- Event overlays on chart
-- Multi-metric toggle (speed, accel, etc.)- 
-This is the core analytical surface.
+  - Primary time-series chart
+  - Event overlays on chart
+  - Multi-metric toggle (speed, accel, etc.)
+  This is the core analytical surface.
 
 3. Summary + Timeline (Bottom)
-Left: aggregated statistics
-Right: event timeline (chronological)
-Clear separation of:
-- Aggregated metrics
-- Discrete events
+  Left: aggregated statistics
+  Right: event timeline (chronological)
+  Clear separation of:
+  - Aggregated metrics
+  - Discrete events
 
 ## Comparison Mode (Concept)
 

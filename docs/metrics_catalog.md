@@ -157,7 +157,7 @@ Bounding box extent represents half-dimensions of the actor in meters.
 | event.timestamp              |     s | float   | `event.timestamp`                                   |
 | event.other_actor_id         |     - | int     | `event.other_actor.id`                              |
 | event.normal_impulse.(x,y,z) |   N·s | vector3 | `event.normal_impulse`                              |
-| event.intensity              |   N·s | float   | `event.normal_impulse` magnitude *(computed)* |
+| event.intensity              |   N·s | float   | `event.normal_impulse` *(computed magnitude)* |
 
 
 ### 3.2 Lane Invasion Event (`carla.LaneInvasionEvent`)

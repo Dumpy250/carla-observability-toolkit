@@ -32,14 +32,18 @@ Target: CARLA Python API 0.10.0
 ## Object: Run
 ### Represents one simulation session.
 #### Required Fields
-| Field                | Type          | Description                    |
-| -------------------- | ------------- | ------------------------------ |
-| run_id               | string (UUID) | Unique identifier for this run |
-| schema_version       | string        | Must equal `"v1"`              |
-| carla.server_version | string        | CARLA server version           |
-| carla.client_version | string        | CARLA Python client version    |
-| carla.map_name       | string        | Map loaded during run          |
+| Field          | Type          | Description                                   |
+| -------------- | ------------- | --------------------------------------------- |
+| run_id         | string (UUID) | Unique identifier for this run                |
+| schema_version | string        | Must equal `"v1"`                             |
+| carla          | object        | CARLA environment metadata (see table below) |
 
+#### `carla` sub-object fields
+| Field          | Type   | Description                 |
+| -------------- | ------ | --------------------------- |
+| server_version | string | CARLA server version        |
+| client_version | string | CARLA Python client version |
+| map_name       | string | Map loaded during run       |
 
 #### Optional fields
 | Field                   | Type   | Description                      |

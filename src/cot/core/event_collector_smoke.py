@@ -48,6 +48,7 @@ def main() -> None:
             "vehicle_blueprint": state.vehicle_blueprint,
         },
     )
+    print(f"[RunLogger] writing to: {logger.run_dir}")
     collector = EventCollector(world, vehicle, bus, run_id=state.run_id)
 
     def handler(msg: TelemetryMessage) -> None:

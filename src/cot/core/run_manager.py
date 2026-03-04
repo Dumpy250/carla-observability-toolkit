@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import replace
+from dataclasses import field
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
@@ -16,6 +17,8 @@ class RunState:
     map_name: Optional[str]
     weather: Optional[dict]
     vehicle_blueprint: Optional[str]
+    tags: dict[str, str] = field(default_factory=dict)
+    abort_reason: Optional[str] = None
 
 
 class RunManager:
@@ -30,6 +33,8 @@ class RunManager:
             map_name=None,
             weather=None,
             vehicle_blueprint=None,
+            tags={},
+            abort_reason=None,
         )
 
     def start_run(self, world, vehicle, run_id: Optional[str] = None) -> RunState:
@@ -44,6 +49,8 @@ class RunManager:
             map_name=self._map_name_if_available(world),
             weather=self._serialize_weather(world),
             vehicle_blueprint=getattr(vehicle, "type_id", None),
+            tags={},
+            abort_reason=None,
         )
         return self._state
 
@@ -56,8 +63,24 @@ class RunManager:
             self._state.ended_at_utc = datetime.now(timezone.utc).isoformat()
         return self._state
 
+    def abort_run(self, reason: str = "keyboard_abort") -> RunState:
+        if self._state.status != "running":
+            return self._state
+
+        self._state.status = "aborted"
+        if self._state.ended_at_utc is None:
+            self._state.ended_at_utc = datetime.now(timezone.utc).isoformat()
+        self._state.abort_reason = reason
+        return self._state
+
+    def tag(self, key: str, value: str) -> RunState:
+        self._state.tags[key] = value
+        return self._state
+
     def get_state(self) -> RunState:
-        return replace(self._state)
+        snapshot = replace(self._state)
+        snapshot.tags = dict(self._state.tags)
+        return snapshot
 
     def is_running(self) -> bool:
         return self._state.status == "running"

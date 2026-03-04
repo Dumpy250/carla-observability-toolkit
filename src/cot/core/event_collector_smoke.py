@@ -12,6 +12,7 @@ from cot.carla_client import make_client
 from cot.core.event_collector import EventCollector
 from cot.core.logger import RunLogger
 from cot.core.metric_bus import MetricBus, TelemetryMessage
+from cot.core.run_manager import RunManager
 from cot.core.vehicle_spawner import VehicleSpawner
 
 
@@ -19,7 +20,7 @@ def main() -> None:
     client = make_client()
     world = client.get_world()
     bus = MetricBus()
-    logger = RunLogger(bus, run_id="smoke")
+    rm = RunManager()
 
     spawner = VehicleSpawner(world)
     vehicle = None
@@ -33,7 +34,21 @@ def main() -> None:
             "Hero vehicle not found. Start CARLA manual_control.py first, then rerun this smoke test."
         )
 
-    collector = EventCollector(world, vehicle, bus, run_id="smoke")
+    state = rm.start_run(world, vehicle, run_id="smoke")
+    print(
+        f"run_id={state.run_id} map_name={state.map_name} "
+        f"vehicle_blueprint={state.vehicle_blueprint}"
+    )
+    logger = RunLogger(
+        bus,
+        run_id=state.run_id,
+        run_metadata={
+            "map_name": state.map_name,
+            "weather": state.weather,
+            "vehicle_blueprint": state.vehicle_blueprint,
+        },
+    )
+    collector = EventCollector(world, vehicle, bus, run_id=state.run_id)
 
     def handler(msg: TelemetryMessage) -> None:
         print(f"{msg.topic} frame={msg.frame} payload={msg.payload}")
@@ -46,6 +61,7 @@ def main() -> None:
         for _ in range(600):
             world.wait_for_tick(1.0)
     finally:
+        rm.stop_run()
         if hasattr(collector, "close") and callable(collector.close):
             collector.close()
         logger.close()

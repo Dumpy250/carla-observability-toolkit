@@ -16,13 +16,25 @@ class VehicleSpawner:
         actors = self.world.get_actors().filter("vehicle.*")
         return actors[0] if actors else None
 
+    def find_ego_vehicle(self) -> Optional[carla.Vehicle]:
+        """Return the hero vehicle when present, otherwise the first vehicle."""
+        actors = self.world.get_actors().filter("vehicle.*")
+        first_vehicle = actors[0] if actors else None
+
+        for vehicle in actors:
+            role_name = vehicle.attributes.get("role_name")
+            if role_name == "hero":
+                return vehicle
+
+        return first_vehicle
+
     def ensure_vehicle(self) -> Optional[carla.Vehicle]:
         """Return an existing vehicle or spawn one deterministically.
 
         Returns `None` when no compatible blueprint exists, no spawn points are
         available, or actor spawning fails.
         """
-        existing = self.find_first_vehicle()
+        existing = self.find_ego_vehicle()
         if existing is not None:
             return existing
 

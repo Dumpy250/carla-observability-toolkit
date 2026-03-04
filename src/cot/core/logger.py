@@ -4,7 +4,7 @@ import csv
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from .metric_bus import MetricBus, Subscription, TelemetryMessage
 
@@ -12,11 +12,18 @@ from .metric_bus import MetricBus, Subscription, TelemetryMessage
 class RunLogger:
     """Persists telemetry from MetricBus into run-scoped files."""
 
-    def __init__(self, metric_bus: MetricBus, run_id: str, output_root: str = "runs") -> None:
+    def __init__(
+        self,
+        metric_bus: MetricBus,
+        run_id: str,
+        output_root: str = "runs",
+        run_metadata: Optional[dict] = None,
+    ) -> None:
         self.metric_bus = metric_bus
         self.run_id = run_id
         self.output_root = Path(output_root)
         self.start_time_utc = datetime.now(timezone.utc)
+        self.run_metadata = run_metadata
 
         timestamp = self.start_time_utc.strftime("%Y%m%dT%H%M%SZ")
         self.run_dir = self.output_root / f"{run_id}_{timestamp}"
@@ -63,19 +70,10 @@ class RunLogger:
         metadata = {
             "run_id": self.run_id,
             "start_time": self.start_time_utc.isoformat(),
-            "map_name": self._map_name_if_available(),
         }
+        if self.run_metadata:
+            metadata.update(self.run_metadata)
         self.metadata_json_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
-
-    def _map_name_if_available(self) -> str | None:
-        world = getattr(self.metric_bus, "world", None)
-        if world is None:
-            return None
-        try:
-            world_map = world.get_map()
-        except Exception:
-            return None
-        return getattr(world_map, "name", None)
 
     def _on_metric_vehicle_state(self, message: TelemetryMessage) -> None:
         payload = message.payload or {}

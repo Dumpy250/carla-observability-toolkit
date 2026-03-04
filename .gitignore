@@ -56,3 +56,5 @@ recordings/
 data/
 outputs/
 
+# CARLA run outputs
+runs/

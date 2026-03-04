@@ -10,6 +10,7 @@ if str(SRC_DIR) not in sys.path:
 
 from cot.carla_client import make_client
 from cot.core.event_collector import EventCollector
+from cot.core.logger import RunLogger
 from cot.core.metric_bus import MetricBus, TelemetryMessage
 from cot.core.vehicle_spawner import VehicleSpawner
 
@@ -18,12 +19,19 @@ def main() -> None:
     client = make_client()
     world = client.get_world()
     bus = MetricBus()
+    logger = RunLogger(bus, run_id="smoke")
 
     spawner = VehicleSpawner(world)
-    spawner.ensure_vehicle()
-    vehicle = spawner.find_ego_vehicle()
-    if vehicle is None:
-        raise RuntimeError("No vehicle available for event collector smoke test")
+    vehicle = None
+    for _ in range(100):
+        vehicle = spawner.find_ego_vehicle()
+        if vehicle is not None and vehicle.attributes.get("role_name") == "hero":
+            break
+        world.wait_for_tick(1.0)
+    if vehicle is None or vehicle.attributes.get("role_name") != "hero":
+        raise RuntimeError(
+            "Hero vehicle not found. Start CARLA manual_control.py first, then rerun this smoke test."
+        )
 
     collector = EventCollector(world, vehicle, bus, run_id="smoke")
 
@@ -40,6 +48,7 @@ def main() -> None:
     finally:
         if hasattr(collector, "close") and callable(collector.close):
             collector.close()
+        logger.close()
         bus.close(drain=True)
         print("event collector smoke complete")
 

@@ -85,7 +85,16 @@ class RunLogger:
             self.metric_bus.subscribe("metric.vehicle.state", self._on_metric_vehicle_state),
             self.metric_bus.subscribe("metric.event.collision", self._on_metric_event),
             self.metric_bus.subscribe("metric.event.lane_invasion", self._on_metric_event),
+            self.metric_bus.subscribe("metric.event.run_started", self._on_metric_event),
         ]
+
+    def _fmt(self, v):
+        if v is None:
+            return None
+        value = float(v)
+        if abs(value) < 1e-4:
+            return 0.0
+        return round(value, 6)
 
     def _write_metadata(self) -> None:
         self.metadata_json_path.write_text(json.dumps(self._metadata, indent=2), encoding="utf-8")
@@ -102,18 +111,18 @@ class RunLogger:
         self._metrics_writer.writerow(
             {
                 "frame": message.frame,
-                "sim_time_s": message.sim_time_s,
-                "speed_mps": payload.get("speed_mps"),
-                "acceleration_x": acceleration.get("x"),
-                "acceleration_y": acceleration.get("y"),
-                "acceleration_z": acceleration.get("z"),
-                "steering": payload.get("steering"),
-                "throttle": payload.get("throttle"),
-                "brake": payload.get("brake"),
-                "position_x": position.get("x"),
-                "position_y": position.get("y"),
-                "position_z": position.get("z"),
-                "heading": payload.get("heading"),
+                "sim_time_s": self._fmt(message.sim_time_s),
+                "speed_mps": self._fmt(payload.get("speed_mps")),
+                "acceleration_x": self._fmt(acceleration.get("x")),
+                "acceleration_y": self._fmt(acceleration.get("y")),
+                "acceleration_z": self._fmt(acceleration.get("z")),
+                "steering": self._fmt(payload.get("steering")),
+                "throttle": self._fmt(payload.get("throttle")),
+                "brake": self._fmt(payload.get("brake")),
+                "position_x": self._fmt(position.get("x")),
+                "position_y": self._fmt(position.get("y")),
+                "position_z": self._fmt(position.get("z")),
+                "heading": self._fmt(payload.get("heading")),
             }
         )
         self._metrics_file.flush()

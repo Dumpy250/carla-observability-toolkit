@@ -204,6 +204,38 @@ def main() -> None:
                     metric_bus.subscribe("metric.vehicle.state", dashboard.update_vehicle)
                     metric_bus.subscribe("metric.event.", dashboard.push_event)
                     logger = RunLogger(metric_bus, run_id=state.run_id, output_root=runs_root)
+
+                    frame = None
+                    sim_time_s = None
+                    try:
+                        snapshot = world.get_snapshot()
+                        if snapshot is not None:
+                            frame = getattr(snapshot, "frame", None)
+                            timestamp = getattr(snapshot, "timestamp", None)
+                            if timestamp is not None:
+                                sim_time_s = getattr(timestamp, "elapsed_seconds", None)
+                    except Exception:
+                        pass
+
+                    payload = {
+                        "run_id": state.run_id,
+                        "type": "run_started",
+                        "source": "user",
+                    }
+                    if frame is not None:
+                        payload["frame"] = frame
+                    if sim_time_s is not None:
+                        payload["sim_time_s"] = sim_time_s
+                    metric_bus.publish(
+                        TelemetryMessage(
+                            topic="metric.event.run_started",
+                            run_id=state.run_id,
+                            frame=frame,
+                            sim_time_s=sim_time_s,
+                            payload=payload,
+                        )
+                    )
+
                     collector_stop.clear()
                     vehicle_collector = VehicleMetricsCollector(metric_bus, world, run_id=state.run_id)
                     event_collector = EventCollector(world, vehicle, metric_bus, run_id=state.run_id)

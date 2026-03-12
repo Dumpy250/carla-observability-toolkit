@@ -26,8 +26,6 @@ The toolkit focuses on three main areas:
 
 ## Current Status
 
-🚧 Work in progress
-
 Current development includes:
 
 - Metric bus architecture
@@ -40,9 +38,9 @@ Current development includes:
 ## Example Output
 
 Example files produced during a simulation run:
-metrics.csv
-events.json
-run_metadata.json
+- `metrics.csv`
+- `events.json`
+- `run_metadata.json`
 
 
 These datasets can be used to analyze vehicle behavior and replay simulation events.
@@ -60,11 +58,11 @@ Planned features include:
 
 - Python
 - CARLA Simulator
-- Pygame client
+- pygame client
 - JSON / CSV telemetry outputs
 
 ## Author
 
-Cameron Basham 
+Cameron Basham
 Software Engineering Student  
 Project developed as part of a CARLA simulation research project.

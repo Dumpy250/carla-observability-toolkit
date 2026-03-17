@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CARLA Observability Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</head>
+<body>
+  <header class="top-bar">
+    <h1>CARLA Observability Dashboard</h1>
+    <div class="controls">
+      <label for="run-selector">Run</label>
+      <select id="run-selector"></select>
+
+      <label class="compare-placeholder" title="Run comparison is not implemented yet.">
+        <input type="checkbox" id="compare-toggle" disabled>
+        Compare (coming soon)
+      </label>
+    </div>
+  </header>
+
+  <section class="metadata" id="metadata-panel">
+    <h2>Run Metadata</h2>
+    <div id="metadata-content">No run selected.</div>
+  </section>
+
+  <section class="chart-section">
+    <div class="metric-toggles" id="metric-toggles">
+      <label><input type="checkbox" data-metric="speed" checked> Speed</label>
+      <label><input type="checkbox" data-metric="acceleration" checked> Acceleration</label>
+      <label><input type="checkbox" data-metric="steering" checked> Steering</label>
+      <label><input type="checkbox" data-metric="throttle" checked> Throttle</label>
+      <label><input type="checkbox" data-metric="brake" checked> Brake</label>
+    </div>
+    <div class="chart-container">
+      <canvas id="run-chart"></canvas>
+    </div>
+  </section>
+
+  <section class="bottom-panels">
+    <div class="panel" id="summary-panel">
+      <h2>Summary Statistics</h2>
+      <div id="summary-content">No run selected.</div>
+    </div>
+
+    <div class="panel" id="events-panel">
+      <h2>Event Timeline</h2>
+      <ul id="events-list"></ul>
+    </div>
+  </section>
+
+  <div id="status" class="status" aria-live="polite"></div>
+</body>
+</html>

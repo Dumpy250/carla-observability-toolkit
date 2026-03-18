@@ -1,5 +1,10 @@
 let chart = null;
-let currentRunData = null;
+let currentRunDataA = null;
+let currentRunDataB = null;
+let currentRunDirA = "";
+let currentRunDirB = "";
+let compareMode = false;
+let availableRuns = [];
 
 const metricConfig = {
   speed: { label: "Speed (m/s)", color: "#4db2ff" },
@@ -8,6 +13,16 @@ const metricConfig = {
   throttle: { label: "Throttle", color: "#c792ea" },
   brake: { label: "Brake", color: "#ff6384" },
 };
+
+const comparisonFields = [
+  { key: "max_speed_mps", label: "Max Speed (m/s)", digits: 3 },
+  { key: "avg_speed_mps", label: "Average Speed (m/s)", digits: 3 },
+  { key: "total_collisions", label: "Total Collisions", digits: 0 },
+  { key: "run_duration_s", label: "Run Duration (s)", digits: 3 },
+  { key: "avg_acceleration_mps2", label: "Average Acceleration (m/s^2)", digits: 3 },
+  { key: "metric_row_count", label: "Metric Rows", digits: 0 },
+  { key: "event_count", label: "Event Count", digits: 0 },
+];
 
 function setStatus(message, isError = false) {
   const statusEl = document.getElementById("status");
@@ -23,6 +38,24 @@ function fmt(value, digits = 3) {
     return String(value);
   }
   return Number.isFinite(value) ? value.toFixed(digits) : "N/A";
+}
+
+function parseNumber(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+  return value;
+}
+
+function hexToRgba(hex, alpha) {
+  const normalized = hex.replace("#", "");
+  if (normalized.length !== 6) {
+    return hex;
+  }
+  const r = Number.parseInt(normalized.slice(0, 2), 16);
+  const g = Number.parseInt(normalized.slice(2, 4), 16);
+  const b = Number.parseInt(normalized.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 function metricPoint(metricRow, metricKey) {
@@ -68,7 +101,7 @@ function metricPoint(metricRow, metricKey) {
   return null;
 }
 
-function buildDatasets(metrics, enabledMetricKeys) {
+function buildDatasets(metrics, enabledMetricKeys, runSuffix, isRunB = false) {
   const datasets = [];
 
   for (const metricKey of enabledMetricKeys) {
@@ -80,12 +113,14 @@ function buildDatasets(metrics, enabledMetricKeys) {
       continue;
     }
 
+    const color = metricConfig[metricKey].color;
     datasets.push({
-      label: metricConfig[metricKey].label,
+      label: `${metricConfig[metricKey].label} (${runSuffix})`,
       data: points,
-      borderColor: metricConfig[metricKey].color,
-      backgroundColor: metricConfig[metricKey].color,
+      borderColor: isRunB ? hexToRgba(color, 0.7) : color,
+      backgroundColor: isRunB ? hexToRgba(color, 0.25) : color,
       borderWidth: 2,
+      borderDash: isRunB ? [8, 4] : [],
       pointRadius: 0,
       tension: 0.15,
     });
@@ -101,10 +136,17 @@ function getEnabledMetrics() {
     .map((cb) => cb.dataset.metric);
 }
 
-function renderChart(runData) {
-  const enabled = getEnabledMetrics();
-  const datasets = buildDatasets(runData.metrics || [], enabled);
+function renderChart() {
   const ctx = document.getElementById("run-chart");
+  const enabled = getEnabledMetrics();
+
+  const datasets = [];
+  if (currentRunDataA) {
+    datasets.push(...buildDatasets(currentRunDataA.metrics || [], enabled, "A"));
+  }
+  if (compareMode && currentRunDataB) {
+    datasets.push(...buildDatasets(currentRunDataB.metrics || [], enabled, "B", true));
+  }
 
   if (chart) {
     chart.destroy();
@@ -151,24 +193,42 @@ function renderChart(runData) {
   });
 }
 
-function renderMetadata(runData, runDirName) {
-  const metadata = runData.metadata || {};
+function renderMetadata() {
   const content = document.getElementById("metadata-content");
+  if (!currentRunDataA) {
+    content.textContent = "No run selected.";
+    return;
+  }
 
-  const runId = metadata.run_id || "N/A";
-  const status = metadata.status || "N/A";
+  const metadataA = currentRunDataA.metadata || {};
+  const metadataB = currentRunDataB ? currentRunDataB.metadata || {} : null;
 
-  content.innerHTML = `
-    <div><strong>Run Dir:</strong> ${runDirName}</div>
-    <div><strong>Run ID:</strong> ${runId}</div>
-    <div><strong>Status:</strong> ${status}</div>
+  let html = `
+    <div><strong>Run A Dir:</strong> ${currentRunDirA || "N/A"}</div>
+    <div><strong>Run A ID:</strong> ${metadataA.run_id || "N/A"}</div>
+    <div><strong>Run A Status:</strong> ${metadataA.status || "N/A"}</div>
   `;
+
+  if (compareMode) {
+    html += `
+      <div class="metadata-separator"></div>
+      <div><strong>Run B Dir:</strong> ${currentRunDirB || "Not selected"}</div>
+      <div><strong>Run B ID:</strong> ${metadataB ? (metadataB.run_id || "N/A") : "N/A"}</div>
+      <div><strong>Run B Status:</strong> ${metadataB ? (metadataB.status || "N/A") : "N/A"}</div>
+    `;
+  }
+
+  content.innerHTML = html;
 }
 
-function renderSummary(runData) {
-  const summary = runData.summary || {};
+function renderSummary() {
   const content = document.getElementById("summary-content");
+  if (!currentRunDataA) {
+    content.textContent = "No run selected.";
+    return;
+  }
 
+  const summary = currentRunDataA.summary || {};
   content.innerHTML = `
     <div class="summary-label">Max Speed (m/s)</div><div>${fmt(summary.max_speed_mps)}</div>
     <div class="summary-label">Average Speed (m/s)</div><div>${fmt(summary.avg_speed_mps)}</div>
@@ -180,8 +240,8 @@ function renderSummary(runData) {
   `;
 }
 
-function renderEvents(runData) {
-  const events = Array.isArray(runData.events) ? [...runData.events] : [];
+function renderEvents() {
+  const events = currentRunDataA && Array.isArray(currentRunDataA.events) ? [...currentRunDataA.events] : [];
   const list = document.getElementById("events-list");
 
   events.sort((a, b) => {
@@ -215,12 +275,122 @@ function renderEvents(runData) {
   }
 }
 
-function renderRun(runData, runDirName) {
-  currentRunData = runData;
-  renderMetadata(runData, runDirName);
-  renderSummary(runData);
-  renderEvents(runData);
-  renderChart(runData);
+function normalizeEventType(eventType) {
+  return String(eventType || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+}
+
+function eventCountSummary(runData) {
+  const events = Array.isArray(runData?.events) ? runData.events : [];
+  let collisions = 0;
+  let laneInvasions = 0;
+
+  for (const event of events) {
+    const eventType = normalizeEventType(event.event_type);
+    if (eventType.includes("collision")) {
+      collisions += 1;
+    }
+    if (eventType.includes("lane_invasion")) {
+      laneInvasions += 1;
+    }
+  }
+
+  return {
+    total: events.length,
+    collisions,
+    laneInvasions,
+  };
+}
+
+function formatDelta(aValue, bValue, digits = 3) {
+  const aNum = parseNumber(aValue);
+  const bNum = parseNumber(bValue);
+  if (aNum === null || bNum === null) {
+    return "N/A";
+  }
+  const delta = bNum - aNum;
+  const sign = delta > 0 ? "+" : "";
+  return `${sign}${delta.toFixed(digits)}`;
+}
+
+function comparisonRowHtml(label, aValue, bValue, digits = 3) {
+  return `
+    <tr>
+      <td>${label}</td>
+      <td>${fmt(aValue, digits)}</td>
+      <td>${fmt(bValue, digits)}</td>
+      <td>${formatDelta(aValue, bValue, digits)}</td>
+    </tr>
+  `;
+}
+
+function renderComparisonPanel() {
+  const panel = document.getElementById("comparison-panel");
+  const content = document.getElementById("comparison-content");
+
+  if (!compareMode) {
+    panel.classList.add("hidden");
+    content.textContent = "Enable compare mode and select Run B.";
+    return;
+  }
+
+  panel.classList.remove("hidden");
+
+  if (!currentRunDataA) {
+    content.textContent = "Run A is not loaded.";
+    return;
+  }
+
+  if (!currentRunDataB) {
+    content.textContent = "Select Run B to compare.";
+    return;
+  }
+
+  const summaryA = currentRunDataA.summary || {};
+  const summaryB = currentRunDataB.summary || {};
+  const eventsA = eventCountSummary(currentRunDataA);
+  const eventsB = eventCountSummary(currentRunDataB);
+
+  const summaryRows = comparisonFields
+    .map((field) => comparisonRowHtml(field.label, summaryA[field.key], summaryB[field.key], field.digits))
+    .join("");
+
+  const eventRows = [
+    comparisonRowHtml("Total Events", eventsA.total, eventsB.total, 0),
+    comparisonRowHtml("Collision Events", eventsA.collisions, eventsB.collisions, 0),
+    comparisonRowHtml("Lane Invasion Events", eventsA.laneInvasions, eventsB.laneInvasions, 0),
+  ].join("");
+
+  content.innerHTML = `
+    <div class="comparison-run-labels">
+      <span><strong>Run A:</strong> ${currentRunDirA}</span>
+      <span><strong>Run B:</strong> ${currentRunDirB}</span>
+    </div>
+    <table class="comparison-table">
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th>Run A</th>
+          <th>Run B</th>
+          <th>Delta (B - A)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${summaryRows}
+        ${eventRows}
+      </tbody>
+    </table>
+  `;
+}
+
+function renderAll() {
+  renderMetadata();
+  renderSummary();
+  renderEvents();
+  renderChart();
+  renderComparisonPanel();
 }
 
 async function fetchJson(url) {
@@ -240,64 +410,176 @@ async function fetchJson(url) {
   return payload;
 }
 
-async function loadRunDetails(runDirName) {
-  setStatus(`Loading run: ${runDirName}...`);
+async function loadRunA(runDirName) {
+  setStatus(`Loading Run A: ${runDirName}...`);
   try {
     const runData = await fetchJson(`/api/runs/${encodeURIComponent(runDirName)}`);
-    renderRun(runData, runDirName);
-    setStatus(`Loaded run: ${runDirName}`);
+    currentRunDataA = runData;
+    currentRunDirA = runDirName;
+    renderAll();
+    setStatus(`Loaded Run A: ${runDirName}`);
   } catch (err) {
-    setStatus(`Failed to load run: ${err.message}`, true);
+    currentRunDataA = null;
+    currentRunDirA = "";
+    renderAll();
+    setStatus(`Failed to load Run A: ${err.message}`, true);
   }
 }
 
+async function loadRunB(runDirName) {
+  if (!runDirName) {
+    currentRunDataB = null;
+    currentRunDirB = "";
+    renderAll();
+    return;
+  }
+
+  setStatus(`Loading Run B: ${runDirName}...`);
+  try {
+    const runData = await fetchJson(`/api/runs/${encodeURIComponent(runDirName)}`);
+    currentRunDataB = runData;
+    currentRunDirB = runDirName;
+    renderAll();
+    setStatus(`Loaded Run B: ${runDirName}`);
+  } catch (err) {
+    currentRunDataB = null;
+    currentRunDirB = "";
+    renderAll();
+    setStatus(`Failed to load Run B: ${err.message}`, true);
+  }
+}
+
+function populateSelectors(runs) {
+  const selectorA = document.getElementById("run-selector");
+  const selectorB = document.getElementById("run-selector-b");
+
+  selectorA.innerHTML = "";
+  selectorB.innerHTML = "<option value=''>Select Run B</option>";
+
+  runs.forEach((run) => {
+    const runId = run.run_id || "no-run-id";
+    const status = run.status || "unknown";
+    const label = `${run.run_dir_name} (${runId}, ${status})`;
+
+    const optionA = document.createElement("option");
+    optionA.value = run.run_dir_name;
+    optionA.textContent = label;
+    selectorA.appendChild(optionA);
+
+    const optionB = document.createElement("option");
+    optionB.value = run.run_dir_name;
+    optionB.textContent = label;
+    selectorB.appendChild(optionB);
+  });
+}
+
+function updateCompareControls() {
+  const toggle = document.getElementById("compare-toggle");
+  const runBControl = document.getElementById("run-b-control");
+  const selectorB = document.getElementById("run-selector-b");
+
+  compareMode = toggle.checked;
+  runBControl.classList.toggle("hidden", !compareMode);
+  runBControl.setAttribute("aria-hidden", String(!compareMode));
+  selectorB.disabled = !compareMode;
+
+  if (!compareMode) {
+    currentRunDataB = null;
+    currentRunDirB = "";
+    selectorB.value = "";
+  }
+
+  renderAll();
+}
+
 async function loadRuns() {
-  const selector = document.getElementById("run-selector");
+  const selectorA = document.getElementById("run-selector");
+  const selectorB = document.getElementById("run-selector-b");
+  const compareToggle = document.getElementById("compare-toggle");
+
   setStatus("Loading runs...");
 
   try {
     const runs = await fetchJson("/api/runs");
-    selector.innerHTML = "";
+    availableRuns = Array.isArray(runs) ? runs : [];
 
-    if (!Array.isArray(runs) || runs.length === 0) {
-      selector.disabled = true;
-      selector.innerHTML = "<option>No runs available</option>";
+    if (availableRuns.length === 0) {
+      selectorA.disabled = true;
+      selectorB.disabled = true;
+      compareToggle.disabled = true;
+      selectorA.innerHTML = "<option>No runs available</option>";
+      selectorB.innerHTML = "<option value=''>No runs available</option>";
+      renderAll();
       setStatus("No runs found under runs/.");
       return;
     }
 
-    selector.disabled = false;
-    runs.forEach((run) => {
-      const option = document.createElement("option");
-      option.value = run.run_dir_name;
-      const runId = run.run_id || "no-run-id";
-      const status = run.status || "unknown";
-      option.textContent = `${run.run_dir_name} (${runId}, ${status})`;
-      selector.appendChild(option);
-    });
+    selectorA.disabled = false;
+    compareToggle.disabled = false;
+    populateSelectors(availableRuns);
 
-    await loadRunDetails(runs[0].run_dir_name);
+    const firstRun = availableRuns[0].run_dir_name;
+    selectorA.value = firstRun;
+    await loadRunA(firstRun);
   } catch (err) {
-    selector.disabled = true;
-    selector.innerHTML = "<option>Error loading runs</option>";
+    selectorA.disabled = true;
+    selectorB.disabled = true;
+    compareToggle.disabled = true;
+    selectorA.innerHTML = "<option>Error loading runs</option>";
+    selectorB.innerHTML = "<option value=''>Error loading runs</option>";
+    renderAll();
     setStatus(`Failed to load runs: ${err.message}`, true);
   }
 }
 
 function bindEvents() {
-  const selector = document.getElementById("run-selector");
-  selector.addEventListener("change", () => {
-    if (!selector.value) {
+  const selectorA = document.getElementById("run-selector");
+  const selectorB = document.getElementById("run-selector-b");
+  const compareToggle = document.getElementById("compare-toggle");
+
+  selectorA.addEventListener("change", async () => {
+    if (!selectorA.value) {
       return;
     }
-    loadRunDetails(selector.value);
+    await loadRunA(selectorA.value);
+  });
+
+  selectorB.addEventListener("change", async () => {
+    if (!compareMode) {
+      return;
+    }
+
+    if (!selectorB.value) {
+      currentRunDataB = null;
+      currentRunDirB = "";
+      renderAll();
+      setStatus("Select Run B to compare.");
+      return;
+    }
+
+    await loadRunB(selectorB.value);
+  });
+
+  compareToggle.addEventListener("change", async () => {
+    updateCompareControls();
+    if (!compareMode) {
+      setStatus("Compare mode disabled.");
+      return;
+    }
+
+    if (!selectorB.value) {
+      setStatus("Compare mode enabled. Select Run B to start comparison.");
+      return;
+    }
+
+    await loadRunB(selectorB.value);
   });
 
   const toggles = document.querySelectorAll("#metric-toggles input[type='checkbox']");
   toggles.forEach((toggle) => {
     toggle.addEventListener("change", () => {
-      if (currentRunData) {
-        renderChart(currentRunData);
+      if (currentRunDataA) {
+        renderChart();
       }
     });
   });
@@ -305,5 +587,6 @@ function bindEvents() {
 
 window.addEventListener("DOMContentLoaded", async () => {
   bindEvents();
+  updateCompareControls();
   await loadRuns();
 });

@@ -12,13 +12,20 @@
   <header class="top-bar">
     <h1>CARLA Observability Dashboard</h1>
     <div class="controls">
-      <label for="run-selector">Run</label>
+      <label for="run-selector">Run A</label>
       <select id="run-selector"></select>
 
-      <label class="compare-placeholder" title="Run comparison is not implemented yet.">
-        <input type="checkbox" id="compare-toggle" disabled>
-        Compare (coming soon)
+      <label class="compare-toggle-label">
+        <input type="checkbox" id="compare-toggle">
+        Compare
       </label>
+
+      <div class="run-b-control hidden" id="run-b-control" aria-hidden="true">
+        <label for="run-selector-b">Run B</label>
+        <select id="run-selector-b" disabled>
+          <option value="">Select Run B</option>
+        </select>
+      </div>
     </div>
   </header>
 
@@ -44,6 +51,11 @@
     <div class="panel" id="summary-panel">
       <h2>Summary Statistics</h2>
       <div id="summary-content">No run selected.</div>
+    </div>
+
+    <div class="panel hidden" id="comparison-panel">
+      <h2>Run Comparison</h2>
+      <div id="comparison-content">Enable compare mode and select Run B.</div>
     </div>
 
     <div class="panel" id="events-panel">

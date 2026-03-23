@@ -21,6 +21,7 @@ from cot.core.event_collector import EventCollector
 from cot.core.logger import RunLogger
 from cot.core.metric_bus import MetricBus
 from cot.core.metric_bus import TelemetryMessage
+from cot.core.experiment_config import load_experiment_config
 from cot.core.run_manager import RunManager
 from cot.core.vehicle_metrics_collector import VehicleMetricsCollector
 
@@ -136,6 +137,18 @@ def _render(screen: pygame.Surface, font: pygame.font.Font, dashboard: Dashboard
     pygame.display.flip()
 
 
+def _apply_config_weather(world, config) -> None:
+    weather_config = getattr(config, "weather", None)
+    if weather_config is None:
+        return
+
+    weather = world.get_weather()
+    for key, value in weather_config.to_dict().items():
+        if hasattr(weather, key):
+            setattr(weather, key, value)
+    world.set_weather(weather)
+
+
 def main() -> None:
     pygame.init()
     pygame.display.set_caption("CARLA Run Controls")
@@ -150,6 +163,7 @@ def main() -> None:
         raise RuntimeError("No vehicle actors found in the CARLA world.")
 
     runs_root = PROJECT_ROOT / "runs"
+    experiment_config_path = PROJECT_ROOT / "configs" / "experiment_v1.json"
     run_manager = RunManager()
     metric_bus: MetricBus | None = None
     logger: RunLogger | None = None
@@ -199,7 +213,28 @@ def main() -> None:
                 elif event.key == pygame.K_F5:
                     if run_manager.is_running():
                         continue
-                    state = run_manager.start_run(world, vehicle)
+                    try:
+                        config = load_experiment_config(experiment_config_path)
+                    except Exception as exc:
+                        print(
+                            f"RUN start failed: unable to load experiment config "
+                            f"from {experiment_config_path}: {exc}"
+                        )
+                        continue
+
+                    try:
+                        _apply_config_weather(world, config)
+                    except Exception as exc:
+                        try:
+                            run_manager.abort_run(
+                                reason=f"weather_apply_failed:{type(exc).__name__}"
+                            )
+                        except Exception:
+                            pass
+                        print(f"RUN start failed: unable to apply weather from config: {exc}")
+                        continue
+                    state = run_manager.start_run(world, vehicle, experiment_config=config)
+
                     metric_bus = MetricBus()
                     metric_bus.subscribe("metric.vehicle.state", dashboard.update_vehicle)
                     metric_bus.subscribe("metric.event.", dashboard.push_event)
@@ -221,6 +256,7 @@ def main() -> None:
                         "run_id": state.run_id,
                         "type": "run_started",
                         "source": "user",
+                        "trigger": "experiment_config",
                     }
                     if frame is not None:
                         payload["frame"] = frame
@@ -243,6 +279,31 @@ def main() -> None:
                     collector_thread.start()
                     dashboard.set_run(state.status, state.run_id)
                     logger.update_metadata(asdict(state))
+                    weather_payload = None
+                    if getattr(config, "weather", None) is not None:
+                        weather_value = getattr(config, "weather")
+                        if hasattr(weather_value, "to_dict"):
+                            weather_payload = weather_value.to_dict()
+                        elif isinstance(weather_value, dict):
+                            weather_payload = dict(weather_value)
+
+                    tags_payload = getattr(config, "tags", {})
+                    if not isinstance(tags_payload, dict):
+                        tags_payload = {}
+
+                    logger.update_metadata(
+                        {
+                            "experiment": {
+                                "experiment_id": getattr(config, "experiment_id", None),
+                                "config_name": getattr(config, "config_name", None),
+                                "seed": getattr(config, "seed", None),
+                                "duration_s": getattr(config, "duration_s", None),
+                                "tags": dict(tags_payload),
+                                "weather": weather_payload,
+                                "config_path": str(experiment_config_path),
+                            }
+                        }
+                    )
                     print(f"RUN started id={state.run_id}")
                 elif event.key == pygame.K_F6:
                     if not run_manager.is_running():

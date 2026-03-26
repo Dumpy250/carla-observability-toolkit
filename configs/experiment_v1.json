@@ -1,0 +1,16 @@
+{
+  "experiment_id": "baseline_smoke_01",
+  "config_name": "experiment_v1",
+  "seed": 42,
+  "duration_s": 60,
+  "tags": {
+    "scenario": "baseline",
+    "owner": "cam"
+  },
+  "weather": {
+    "cloudiness": 10.0,
+    "precipitation": 0.0,
+    "wetness": 0.0,
+    "sun_altitude_angle": 45.0
+  }
+}

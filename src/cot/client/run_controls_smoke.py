@@ -30,6 +30,10 @@ from cot.core.vehicle_metrics_collector import VehicleMetricsCollector
 class DashboardState:
     status: str = "STOPPED"
     run_id: str = "-"
+    experiment_id: str = "-"
+    config_name: str = "-"
+    scenario_label: str = "-"
+    seed: str = "-"
     speed_kmh: float = 0.0
     acceleration_magnitude: float = 0.0
     steering: float = 0.0
@@ -41,9 +45,26 @@ class DashboardState:
             self.status = status.upper()
             self.run_id = run_id or "-"
             if self.status != "RUNNING":
+                self.experiment_id = "-"
+                self.config_name = "-"
+                self.scenario_label = "-"
+                self.seed = "-"
                 self.speed_kmh = 0.0
                 self.acceleration_magnitude = 0.0
                 self.steering = 0.0
+
+    def set_experiment_metadata(
+        self,
+        experiment_id: Optional[str],
+        config_name: Optional[str],
+        scenario_label: Optional[str],
+        seed: Optional[int],
+    ) -> None:
+        with self._lock:
+            self.experiment_id = experiment_id if experiment_id else "-"
+            self.config_name = config_name if config_name else "-"
+            self.scenario_label = scenario_label if scenario_label else "-"
+            self.seed = str(seed) if seed is not None else "-"
 
     def update_vehicle(self, message: TelemetryMessage) -> None:
         payload = message.payload if isinstance(message.payload, dict) else {}
@@ -76,11 +97,15 @@ class DashboardState:
             if len(self.events) > 3:
                 self.events = self.events[:3]
 
-    def snapshot(self) -> tuple[str, str, float, float, float, list[str]]:
+    def snapshot(self) -> tuple[str, str, str, str, str, str, float, float, float, list[str]]:
         with self._lock:
             return (
                 self.status,
                 self.run_id,
+                self.experiment_id,
+                self.config_name,
+                self.scenario_label,
+                self.seed,
                 self.speed_kmh,
                 self.acceleration_magnitude,
                 self.steering,
@@ -119,9 +144,24 @@ def _parse_key_value(user_input: str) -> tuple[str, str] | None:
 
 def _render(screen: pygame.Surface, font: pygame.font.Font, dashboard: DashboardState) -> None:
     screen.fill((0, 0, 0))
-    status, run_id, speed_kmh, accel_mag, steering, events = dashboard.snapshot()
+    (
+        status,
+        run_id,
+        experiment_id,
+        config_name,
+        scenario_label,
+        seed,
+        speed_kmh,
+        accel_mag,
+        steering,
+        events,
+    ) = dashboard.snapshot()
     lines = [
         f"Run: {status}  id={run_id}",
+        f"Experiment: {experiment_id}",
+        f"Config: {config_name}",
+        f"Scenario: {scenario_label}",
+        f"Seed: {seed}",
         f"Speed: {speed_kmh:.1f} km/h",
         f"Accel |a|: {accel_mag:.2f} m/s^2",
         f"Steering: {steering:.3f}",
@@ -152,7 +192,7 @@ def _apply_config_weather(world, config) -> None:
 def main() -> None:
     pygame.init()
     pygame.display.set_caption("CARLA Run Controls")
-    screen = pygame.display.set_mode((420, 220))
+    screen = pygame.display.set_mode((560, 320))
     font = pygame.font.Font(None, 20)
     clock = pygame.time.Clock()
 
@@ -278,6 +318,17 @@ def main() -> None:
                     collector_thread = Thread(target=tick_vehicle_metrics, daemon=True)
                     collector_thread.start()
                     dashboard.set_run(state.status, state.run_id)
+
+                    tags_payload = getattr(config, "tags", {})
+                    if not isinstance(tags_payload, dict):
+                        tags_payload = {}
+                    dashboard.set_experiment_metadata(
+                        getattr(config, "experiment_id", None),
+                        getattr(config, "config_name", None),
+                        tags_payload.get("scenario"),
+                        getattr(config, "seed", None),
+                    )
+
                     logger.update_metadata(asdict(state))
                     weather_payload = None
                     if getattr(config, "weather", None) is not None:
@@ -286,10 +337,6 @@ def main() -> None:
                             weather_payload = weather_value.to_dict()
                         elif isinstance(weather_value, dict):
                             weather_payload = dict(weather_value)
-
-                    tags_payload = getattr(config, "tags", {})
-                    if not isinstance(tags_payload, dict):
-                        tags_payload = {}
 
                     logger.update_metadata(
                         {

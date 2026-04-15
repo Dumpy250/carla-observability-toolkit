@@ -90,7 +90,7 @@ class DashboardState:
         frame_value = payload.get("frame")
         if frame_value is None:
             frame_value = message.frame
-        event_line = f"{event_type} frame={frame_value if frame_value is not None else '?'}"
+        event_line = f"{event_type} @ {frame_value if frame_value is not None else '?'}"
 
         with self._lock:
             self.events.insert(0, event_line)
@@ -142,8 +142,49 @@ def _parse_key_value(user_input: str) -> tuple[str, str] | None:
     return key, value
 
 
-def _render(screen: pygame.Surface, font: pygame.font.Font, dashboard: DashboardState) -> None:
-    screen.fill((0, 0, 0))
+def _truncate_middle(value: str, keep: int = 8) -> str:
+    if len(value) <= keep * 2 + 3:
+        return value
+    return f"{value[:keep]}...{value[-keep:]}"
+
+
+def _draw_panel(screen: pygame.Surface, rect: pygame.Rect, border_color: tuple[int, int, int]) -> None:
+    pygame.draw.rect(screen, (27, 33, 44), rect, border_radius=8)
+    pygame.draw.rect(screen, border_color, rect, width=1, border_radius=8)
+
+
+def _draw_kv_rows(
+    screen: pygame.Surface,
+    label_font: pygame.font.Font,
+    value_font: pygame.font.Font,
+    rect: pygame.Rect,
+    rows: list[tuple[str, str]],
+    label_color: tuple[int, int, int] = (150, 164, 186),
+    value_color: tuple[int, int, int] = (228, 233, 241),
+    row_height: int = 22,
+) -> None:
+    label_x = rect.left
+    value_x = rect.left + 172
+    y = rect.top
+    for label, value in rows:
+        label_surface = label_font.render(label, True, label_color)
+        value_surface = value_font.render(value, True, value_color)
+        screen.blit(label_surface, (label_x, y))
+        screen.blit(value_surface, (value_x, y))
+        y += row_height
+
+
+def _render(
+    screen: pygame.Surface,
+    title_font: pygame.font.Font,
+    section_font: pygame.font.Font,
+    label_font: pygame.font.Font,
+    value_font: pygame.font.Font,
+    metric_font: pygame.font.Font,
+    speed_metric_font: pygame.font.Font,
+    dashboard: DashboardState,
+) -> None:
+    screen.fill((19, 24, 32))
     (
         status,
         run_id,
@@ -156,24 +197,74 @@ def _render(screen: pygame.Surface, font: pygame.font.Font, dashboard: Dashboard
         steering,
         events,
     ) = dashboard.snapshot()
-    lines = [
-        f"Run: {status}  id={run_id}",
-        f"Experiment: {experiment_id}",
-        f"Config: {config_name}",
-        f"Scenario: {scenario_label}",
-        f"Seed: {seed}",
-        f"Speed: {speed_kmh:.1f} km/h",
-        f"Accel |a|: {accel_mag:.2f} m/s^2",
-        f"Steering: {steering:.3f}",
-        "Events (latest 3):",
-    ]
-    lines.extend([f"  - {evt}" for evt in events] or ["  - (none)"])
 
-    y = 12
-    for line in lines:
-        text = font.render(line, True, (220, 220, 220))
-        screen.blit(text, (10, y))
-        y += 24
+    status_color = (86, 214, 128) if status == "RUNNING" else (235, 98, 98) if status == "STOPPED" else (229, 233, 240)
+    short_run_id = _truncate_middle(run_id) if run_id != "-" else run_id
+    title_surface = title_font.render("CARLA Observability Toolkit", True, (228, 233, 241))
+    subtitle_surface = label_font.render("Client Telemetry Dashboard", True, (150, 164, 186))
+    screen.blit(title_surface, (14, 10))
+    screen.blit(subtitle_surface, (14, 34))
+
+    panel_width = screen.get_width() - 24
+    run_panel = pygame.Rect(12, 70, panel_width, 156)
+    metrics_panel = pygame.Rect(12, 244, panel_width, 94)
+    events_panel = pygame.Rect(12, 356, panel_width, 98)
+    _draw_panel(screen, run_panel, (49, 61, 79))
+    _draw_panel(screen, metrics_panel, (49, 61, 79))
+    _draw_panel(screen, events_panel, (49, 61, 79))
+
+    section_color = (174, 188, 211)
+    run_title = section_font.render("RUN INFO", True, section_color)
+    metrics_title = section_font.render("VEHICLE METRICS", True, section_color)
+    events_title = section_font.render("EVENTS", True, section_color)
+    screen.blit(run_title, (run_panel.left + 12, run_panel.top + 10))
+    screen.blit(metrics_title, (metrics_panel.left + 12, metrics_panel.top + 10))
+    screen.blit(events_title, (events_panel.left + 12, events_panel.top + 10))
+
+    status_label = label_font.render("Run Status", True, (150, 164, 186))
+    status_value = section_font.render(status, True, status_color)
+    screen.blit(status_label, (run_panel.left + 12, run_panel.top + 38))
+    screen.blit(status_value, (run_panel.left + 172, run_panel.top + 36))
+    _draw_kv_rows(
+        screen,
+        label_font,
+        value_font,
+        pygame.Rect(run_panel.left + 12, run_panel.top + 64, run_panel.width - 24, 84),
+        [
+            ("Run ID", short_run_id),
+            ("Experiment", experiment_id),
+            ("Config", config_name),
+            ("Scenario", scenario_label),
+            ("Seed", seed),
+        ],
+        row_height=19,
+    )
+
+    metric_y = metrics_panel.top + 38
+    speed_label = label_font.render("Speed", True, (150, 164, 186))
+    accel_label = label_font.render("Acceleration (|a|)", True, (150, 164, 186))
+    steer_label = label_font.render("Steering", True, (150, 164, 186))
+    speed_value = speed_metric_font.render(f"{speed_kmh:.1f} km/h", True, (236, 242, 252))
+    accel_value = metric_font.render(f"{accel_mag:.2f} m/s^2", True, (228, 233, 241))
+    steer_value = metric_font.render(f"{steering:.3f}", True, (228, 233, 241))
+
+    speed_x = metrics_panel.left + 12
+    accel_x = metrics_panel.left + metrics_panel.width // 3 + 8
+    steer_x = metrics_panel.left + (2 * metrics_panel.width) // 3 + 8
+    screen.blit(speed_label, (speed_x, metric_y))
+    screen.blit(accel_label, (accel_x, metric_y))
+    screen.blit(steer_label, (steer_x, metric_y))
+    screen.blit(speed_value, (speed_x, metric_y + 14))
+    screen.blit(accel_value, (accel_x, metric_y + 16))
+    screen.blit(steer_value, (steer_x, metric_y + 16))
+
+    event_start_x = events_panel.left + 12
+    event_start_y = events_panel.top + 34
+    event_lines = events[:3] if events else ["(none)"]
+
+    for index, event_line in enumerate(event_lines):
+        event_surface = value_font.render(event_line, True, (211, 219, 233))
+        screen.blit(event_surface, (event_start_x, event_start_y + index * 20))
     pygame.display.flip()
 
 
@@ -192,8 +283,13 @@ def _apply_config_weather(world, config) -> None:
 def main() -> None:
     pygame.init()
     pygame.display.set_caption("CARLA Run Controls")
-    screen = pygame.display.set_mode((560, 320))
-    font = pygame.font.Font(None, 20)
+    screen = pygame.display.set_mode((620, 470))
+    title_font = pygame.font.Font(None, 28)
+    section_font = pygame.font.Font(None, 24)
+    label_font = pygame.font.Font(None, 20)
+    value_font = pygame.font.Font(None, 21)
+    metric_font = pygame.font.Font(None, 26)
+    speed_metric_font = pygame.font.Font(None, 30)
     clock = pygame.time.Clock()
 
     client = make_client()
@@ -390,7 +486,16 @@ def main() -> None:
                     if logger is not None:
                         logger.update_metadata(asdict(state))
                     print(f"TAG {key}={value}")
-            _render(screen, font, dashboard)
+            _render(
+                screen,
+                title_font,
+                section_font,
+                label_font,
+                value_font,
+                metric_font,
+                speed_metric_font,
+                dashboard,
+            )
             clock.tick(30)
     finally:
         if run_manager.is_running():

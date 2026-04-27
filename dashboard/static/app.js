@@ -6,6 +6,16 @@ let currentRunDirB = "";
 let compareMode = false;
 let availableRuns = [];
 
+const NO_DATA_LABEL = "N/A";
+const DEFAULT_DECIMAL_DIGITS = 3;
+const CHART_LINE_WIDTH = 2;
+const CHART_RUN_B_DASH = [8, 4];
+const CHART_POINT_RADIUS = 0;
+const CHART_LINE_TENSION = 0.15;
+const RUN_SELECTOR_B_DEFAULT_OPTION = "<option value=''>Select Run B</option>";
+const RUN_SELECTOR_B_NONE_OPTION = "<option value=''>No runs available</option>";
+const RUN_SELECTOR_B_ERROR_OPTION = "<option value=''>Error loading runs</option>";
+
 const metricConfig = {
   speed: { label: "Speed (m/s)", color: "#4db2ff" },
   acceleration: { label: "Acceleration |a| (m/s^2)", color: "#ff9f40" },
@@ -24,20 +34,52 @@ const comparisonFields = [
   { key: "event_count", label: "Event Count", digits: 0 },
 ];
 
+const METRIC_VALUE_EXTRACTORS = {
+  speed(metricRow) {
+    return metricRow.speed_mps === null || metricRow.speed_mps === undefined
+      ? null
+      : metricRow.speed_mps;
+  },
+  acceleration(metricRow) {
+    const ax = metricRow.acceleration_x;
+    const ay = metricRow.acceleration_y;
+    const az = metricRow.acceleration_z;
+    if ([ax, ay, az].some((value) => value === null || value === undefined)) {
+      return null;
+    }
+    return Math.sqrt((ax * ax) + (ay * ay) + (az * az));
+  },
+  steering(metricRow) {
+    return metricRow.steering === null || metricRow.steering === undefined
+      ? null
+      : metricRow.steering;
+  },
+  throttle(metricRow) {
+    return metricRow.throttle === null || metricRow.throttle === undefined
+      ? null
+      : metricRow.throttle;
+  },
+  brake(metricRow) {
+    return metricRow.brake === null || metricRow.brake === undefined
+      ? null
+      : metricRow.brake;
+  },
+};
+
 function setStatus(message, isError = false) {
   const statusEl = document.getElementById("status");
   statusEl.textContent = message || "";
   statusEl.classList.toggle("error", isError);
 }
 
-function fmt(value, digits = 3) {
+function fmt(value, digits = DEFAULT_DECIMAL_DIGITS) {
   if (value === null || value === undefined) {
-    return "N/A";
+    return NO_DATA_LABEL;
   }
   if (typeof value !== "number") {
     return String(value);
   }
-  return Number.isFinite(value) ? value.toFixed(digits) : "N/A";
+  return Number.isFinite(value) ? value.toFixed(digits) : NO_DATA_LABEL;
 }
 
 function parseNumber(value) {
@@ -63,42 +105,12 @@ function metricPoint(metricRow, metricKey) {
     return null;
   }
 
-  if (metricKey === "speed") {
-    return metricRow.speed_mps === null || metricRow.speed_mps === undefined
-      ? null
-      : { x: metricRow.sim_time_s, y: metricRow.speed_mps };
+  if (!Object.prototype.hasOwnProperty.call(METRIC_VALUE_EXTRACTORS, metricKey)) {
+    return null;
   }
 
-  if (metricKey === "acceleration") {
-    const ax = metricRow.acceleration_x;
-    const ay = metricRow.acceleration_y;
-    const az = metricRow.acceleration_z;
-    if ([ax, ay, az].some((value) => value === null || value === undefined)) {
-      return null;
-    }
-    const magnitude = Math.sqrt((ax * ax) + (ay * ay) + (az * az));
-    return { x: metricRow.sim_time_s, y: magnitude };
-  }
-
-  if (metricKey === "steering") {
-    return metricRow.steering === null || metricRow.steering === undefined
-      ? null
-      : { x: metricRow.sim_time_s, y: metricRow.steering };
-  }
-
-  if (metricKey === "throttle") {
-    return metricRow.throttle === null || metricRow.throttle === undefined
-      ? null
-      : { x: metricRow.sim_time_s, y: metricRow.throttle };
-  }
-
-  if (metricKey === "brake") {
-    return metricRow.brake === null || metricRow.brake === undefined
-      ? null
-      : { x: metricRow.sim_time_s, y: metricRow.brake };
-  }
-
-  return null;
+  const yValue = METRIC_VALUE_EXTRACTORS[metricKey](metricRow);
+  return yValue === null ? null : { x: metricRow.sim_time_s, y: yValue };
 }
 
 function buildDatasets(metrics, enabledMetricKeys, runSuffix, isRunB = false) {
@@ -119,10 +131,10 @@ function buildDatasets(metrics, enabledMetricKeys, runSuffix, isRunB = false) {
       data: points,
       borderColor: isRunB ? hexToRgba(color, 0.7) : color,
       backgroundColor: isRunB ? hexToRgba(color, 0.25) : color,
-      borderWidth: 2,
-      borderDash: isRunB ? [8, 4] : [],
-      pointRadius: 0,
-      tension: 0.15,
+      borderWidth: CHART_LINE_WIDTH,
+      borderDash: isRunB ? CHART_RUN_B_DASH : [],
+      pointRadius: CHART_POINT_RADIUS,
+      tension: CHART_LINE_TENSION,
     });
   }
 
@@ -205,16 +217,16 @@ function renderMetadata() {
 
   let html = `
     <div><strong>Run A Dir:</strong> ${currentRunDirA || "N/A"}</div>
-    <div><strong>Run A ID:</strong> ${metadataA.run_id || "N/A"}</div>
-    <div><strong>Run A Status:</strong> ${metadataA.status || "N/A"}</div>
+    <div><strong>Run A ID:</strong> ${metadataA.run_id || NO_DATA_LABEL}</div>
+    <div><strong>Run A Status:</strong> ${metadataA.status || NO_DATA_LABEL}</div>
   `;
 
   if (compareMode) {
     html += `
       <div class="metadata-separator"></div>
       <div><strong>Run B Dir:</strong> ${currentRunDirB || "Not selected"}</div>
-      <div><strong>Run B ID:</strong> ${metadataB ? (metadataB.run_id || "N/A") : "N/A"}</div>
-      <div><strong>Run B Status:</strong> ${metadataB ? (metadataB.status || "N/A") : "N/A"}</div>
+      <div><strong>Run B ID:</strong> ${metadataB ? (metadataB.run_id || NO_DATA_LABEL) : NO_DATA_LABEL}</div>
+      <div><strong>Run B Status:</strong> ${metadataB ? (metadataB.status || NO_DATA_LABEL) : NO_DATA_LABEL}</div>
     `;
   }
 
@@ -232,11 +244,11 @@ function renderSummary() {
   content.innerHTML = `
     <div class="summary-label">Max Speed (m/s)</div><div>${fmt(summary.max_speed_mps)}</div>
     <div class="summary-label">Average Speed (m/s)</div><div>${fmt(summary.avg_speed_mps)}</div>
-    <div class="summary-label">Total Collisions</div><div>${summary.total_collisions ?? "N/A"}</div>
+    <div class="summary-label">Total Collisions</div><div>${summary.total_collisions ?? NO_DATA_LABEL}</div>
     <div class="summary-label">Run Duration (s)</div><div>${fmt(summary.run_duration_s)}</div>
     <div class="summary-label">Average Acceleration (m/s^2)</div><div>${fmt(summary.avg_acceleration_mps2)}</div>
-    <div class="summary-label">Metric Rows</div><div>${summary.metric_row_count ?? "N/A"}</div>
-    <div class="summary-label">Events</div><div>${summary.event_count ?? "N/A"}</div>
+    <div class="summary-label">Metric Rows</div><div>${summary.metric_row_count ?? NO_DATA_LABEL}</div>
+    <div class="summary-label">Events</div><div>${summary.event_count ?? NO_DATA_LABEL}</div>
   `;
 }
 
@@ -268,8 +280,8 @@ function renderEvents() {
   for (const event of events) {
     const li = document.createElement("li");
     const eventType = event.event_type || "unknown";
-    const frame = event.frame ?? "N/A";
-    const simTime = event.sim_time_s === null || event.sim_time_s === undefined ? "N/A" : fmt(event.sim_time_s);
+    const frame = event.frame ?? NO_DATA_LABEL;
+    const simTime = event.sim_time_s === null || event.sim_time_s === undefined ? NO_DATA_LABEL : fmt(event.sim_time_s);
     li.textContent = `${eventType} | frame=${frame} | sim_time_s=${simTime}`;
     list.appendChild(li);
   }
@@ -304,18 +316,18 @@ function eventCountSummary(runData) {
   };
 }
 
-function formatDelta(aValue, bValue, digits = 3) {
+function formatDelta(aValue, bValue, digits = DEFAULT_DECIMAL_DIGITS) {
   const aNum = parseNumber(aValue);
   const bNum = parseNumber(bValue);
   if (aNum === null || bNum === null) {
-    return "N/A";
+    return NO_DATA_LABEL;
   }
   const delta = bNum - aNum;
   const sign = delta > 0 ? "+" : "";
   return `${sign}${delta.toFixed(digits)}`;
 }
 
-function comparisonRowHtml(label, aValue, bValue, digits = 3) {
+function comparisonRowHtml(label, aValue, bValue, digits = DEFAULT_DECIMAL_DIGITS) {
   return `
     <tr>
       <td>${label}</td>
@@ -428,9 +440,7 @@ async function loadRunA(runDirName) {
 
 async function loadRunB(runDirName) {
   if (!runDirName) {
-    currentRunDataB = null;
-    currentRunDirB = "";
-    renderAll();
+    clearRunBState();
     return;
   }
 
@@ -454,7 +464,7 @@ function populateSelectors(runs) {
   const selectorB = document.getElementById("run-selector-b");
 
   selectorA.innerHTML = "";
-  selectorB.innerHTML = "<option value=''>Select Run B</option>";
+  selectorB.innerHTML = RUN_SELECTOR_B_DEFAULT_OPTION;
 
   runs.forEach((run) => {
     const runId = run.run_id || "no-run-id";
@@ -473,6 +483,30 @@ function populateSelectors(runs) {
   });
 }
 
+function clearRunBData() {
+  currentRunDataB = null;
+  currentRunDirB = "";
+}
+
+function clearRunBState(selectorB = null) {
+  clearRunBData();
+  if (selectorB) {
+    selectorB.value = "";
+  }
+  renderAll();
+}
+
+function setRunsControlsEnabledState(selectorA, selectorB, compareToggle, enabled) {
+  selectorA.disabled = !enabled;
+  selectorB.disabled = !enabled;
+  compareToggle.disabled = !enabled;
+}
+
+function setRunSelectorsPlaceholder(selectorA, selectorB, selectorAText, selectorBHtml) {
+  selectorA.innerHTML = selectorAText;
+  selectorB.innerHTML = selectorBHtml;
+}
+
 function updateCompareControls() {
   const toggle = document.getElementById("compare-toggle");
   const runBControl = document.getElementById("run-b-control");
@@ -484,8 +518,7 @@ function updateCompareControls() {
   selectorB.disabled = !compareMode;
 
   if (!compareMode) {
-    currentRunDataB = null;
-    currentRunDirB = "";
+    clearRunBData();
     selectorB.value = "";
   }
 
@@ -504,11 +537,13 @@ async function loadRuns() {
     availableRuns = Array.isArray(runs) ? runs : [];
 
     if (availableRuns.length === 0) {
-      selectorA.disabled = true;
-      selectorB.disabled = true;
-      compareToggle.disabled = true;
-      selectorA.innerHTML = "<option>No runs available</option>";
-      selectorB.innerHTML = "<option value=''>No runs available</option>";
+      setRunsControlsEnabledState(selectorA, selectorB, compareToggle, false);
+      setRunSelectorsPlaceholder(
+        selectorA,
+        selectorB,
+        "<option>No runs available</option>",
+        RUN_SELECTOR_B_NONE_OPTION
+      );
       renderAll();
       setStatus("No runs found under runs/.");
       return;
@@ -522,59 +557,55 @@ async function loadRuns() {
     selectorA.value = firstRun;
     await loadRunA(firstRun);
   } catch (err) {
-    selectorA.disabled = true;
-    selectorB.disabled = true;
-    compareToggle.disabled = true;
-    selectorA.innerHTML = "<option>Error loading runs</option>";
-    selectorB.innerHTML = "<option value=''>Error loading runs</option>";
+    setRunsControlsEnabledState(selectorA, selectorB, compareToggle, false);
+    setRunSelectorsPlaceholder(
+      selectorA,
+      selectorB,
+      "<option>Error loading runs</option>",
+      RUN_SELECTOR_B_ERROR_OPTION
+    );
     renderAll();
     setStatus(`Failed to load runs: ${err.message}`, true);
   }
 }
 
-function bindEvents() {
-  const selectorA = document.getElementById("run-selector");
-  const selectorB = document.getElementById("run-selector-b");
-  const compareToggle = document.getElementById("compare-toggle");
+async function handleRunASelectorChange(selectorA) {
+  if (!selectorA.value) {
+    return;
+  }
+  await loadRunA(selectorA.value);
+}
 
-  selectorA.addEventListener("change", async () => {
-    if (!selectorA.value) {
-      return;
-    }
-    await loadRunA(selectorA.value);
-  });
+async function handleRunBSelectorChange(selectorB) {
+  if (!compareMode) {
+    return;
+  }
 
-  selectorB.addEventListener("change", async () => {
-    if (!compareMode) {
-      return;
-    }
+  if (!selectorB.value) {
+    clearRunBState();
+    setStatus("Select Run B to compare.");
+    return;
+  }
 
-    if (!selectorB.value) {
-      currentRunDataB = null;
-      currentRunDirB = "";
-      renderAll();
-      setStatus("Select Run B to compare.");
-      return;
-    }
+  await loadRunB(selectorB.value);
+}
 
-    await loadRunB(selectorB.value);
-  });
+async function handleCompareToggleChange(selectorB) {
+  updateCompareControls();
+  if (!compareMode) {
+    setStatus("Compare mode disabled.");
+    return;
+  }
 
-  compareToggle.addEventListener("change", async () => {
-    updateCompareControls();
-    if (!compareMode) {
-      setStatus("Compare mode disabled.");
-      return;
-    }
+  if (!selectorB.value) {
+    setStatus("Compare mode enabled. Select Run B to start comparison.");
+    return;
+  }
 
-    if (!selectorB.value) {
-      setStatus("Compare mode enabled. Select Run B to start comparison.");
-      return;
-    }
+  await loadRunB(selectorB.value);
+}
 
-    await loadRunB(selectorB.value);
-  });
-
+function bindMetricToggleEvents() {
   const toggles = document.querySelectorAll("#metric-toggles input[type='checkbox']");
   toggles.forEach((toggle) => {
     toggle.addEventListener("change", () => {
@@ -583,6 +614,17 @@ function bindEvents() {
       }
     });
   });
+}
+
+function bindEvents() {
+  const selectorA = document.getElementById("run-selector");
+  const selectorB = document.getElementById("run-selector-b");
+  const compareToggle = document.getElementById("compare-toggle");
+
+  selectorA.addEventListener("change", async () => handleRunASelectorChange(selectorA));
+  selectorB.addEventListener("change", async () => handleRunBSelectorChange(selectorB));
+  compareToggle.addEventListener("change", async () => handleCompareToggleChange(selectorB));
+  bindMetricToggleEvents();
 }
 
 window.addEventListener("DOMContentLoaded", async () => {

@@ -29,6 +29,15 @@ from cot.core.vehicle_metrics_collector import VehicleMetricsCollector
 SPEED_WARNING_THRESHOLD_KMH = 80.0
 MAX_ACTIVE_ALERTS = 3
 DEFAULT_ALERT_DURATION_S = 1.8
+MIN_ALERT_DURATION_S = 0.1
+HIGH_SPEED_ALERT_DURATION_S = 0.5
+LANE_INVASION_ALERT_DURATION_S = 1.5
+RECENT_EVENT_LIMIT = 3
+ALERT_BANNERS_VISIBLE = 2
+COLLECTOR_WAIT_FOR_TICK_TIMEOUT_S = 0.25
+COLLECTOR_JOIN_TIMEOUT_S = 2.0
+DASHBOARD_WINDOW_SIZE = (620, 470)
+DASHBOARD_FPS = 30
 
 
 @dataclass
@@ -104,7 +113,7 @@ class DashboardState:
                     key="high_speed",
                     text="HIGH SPEED",
                     color=(255, 176, 64),
-                    duration_s=0.5,
+                    duration_s=HIGH_SPEED_ALERT_DURATION_S,
                 )
             else:
                 self._remove_alert_locked("high_speed")
@@ -121,8 +130,8 @@ class DashboardState:
 
         with self._lock:
             self.events.insert(0, event_line)
-            if len(self.events) > 3:
-                self.events = self.events[:3]
+            if len(self.events) > RECENT_EVENT_LIMIT:
+                self.events = self.events[:RECENT_EVENT_LIMIT]
             if event_type == "collision":
                 self._upsert_alert_locked(
                     key="collision",
@@ -135,7 +144,7 @@ class DashboardState:
                     key="lane_invasion",
                     text="LANE INVASION",
                     color=(230, 193, 107),
-                    duration_s=1.5,
+                    duration_s=LANE_INVASION_ALERT_DURATION_S,
                 )
 
     def _upsert_alert_locked(
@@ -146,7 +155,7 @@ class DashboardState:
         duration_s: float,
     ) -> None:
         now = monotonic()
-        expires_at = now + max(0.1, duration_s)
+        expires_at = now + max(MIN_ALERT_DURATION_S, duration_s)
         self.alerts = [alert for alert in self.alerts if alert.expires_at > now]
         for alert in self.alerts:
             if alert.key == key:
@@ -254,7 +263,7 @@ def _draw_alerts(
     now = monotonic()
     banner_y = 46
     banner_height = 20
-    max_visible = min(len(alerts), 2)
+    max_visible = min(len(alerts), ALERT_BANNERS_VISIBLE)
     for index in range(max_visible):
         alert = alerts[index]
         remaining = max(0.0, alert.expires_at - now)
@@ -273,6 +282,113 @@ def _draw_alerts(
         screen.blit(border_surface, (banner_x, y))
         text_x = banner_x + max(10, (banner_width - text_surface.get_width()) // 2)
         screen.blit(text_surface, (text_x, y + 2))
+
+
+def _draw_header(
+    screen: pygame.Surface,
+    title_font: pygame.font.Font,
+    label_font: pygame.font.Font,
+) -> None:
+    title_surface = title_font.render("CARLA Observability Toolkit", True, (228, 233, 241))
+    subtitle_surface = label_font.render("Client Telemetry Dashboard", True, (150, 164, 186))
+    screen.blit(title_surface, (14, 10))
+    screen.blit(subtitle_surface, (14, 34))
+
+
+def _draw_run_panel(
+    screen: pygame.Surface,
+    section_font: pygame.font.Font,
+    label_font: pygame.font.Font,
+    value_font: pygame.font.Font,
+    run_panel: pygame.Rect,
+    status: str,
+    status_color: tuple[int, int, int],
+    short_run_id: str,
+    experiment_id: str,
+    config_name: str,
+    scenario_label: str,
+    seed: str,
+) -> None:
+    _draw_panel(screen, run_panel, (49, 61, 79))
+    section_color = (174, 188, 211)
+    run_title = section_font.render("RUN INFO", True, section_color)
+    screen.blit(run_title, (run_panel.left + 12, run_panel.top + 10))
+
+    status_label = label_font.render("Run Status", True, (150, 164, 186))
+    status_value = section_font.render(status, True, status_color)
+    screen.blit(status_label, (run_panel.left + 12, run_panel.top + 38))
+    screen.blit(status_value, (run_panel.left + 172, run_panel.top + 36))
+    _draw_kv_rows(
+        screen,
+        label_font,
+        value_font,
+        pygame.Rect(run_panel.left + 12, run_panel.top + 64, run_panel.width - 24, 84),
+        [
+            ("Run ID", short_run_id),
+            ("Experiment", experiment_id),
+            ("Config", config_name),
+            ("Scenario", scenario_label),
+            ("Seed", seed),
+        ],
+        row_height=19,
+    )
+
+
+def _draw_metrics_panel(
+    screen: pygame.Surface,
+    section_font: pygame.font.Font,
+    label_font: pygame.font.Font,
+    metric_font: pygame.font.Font,
+    speed_metric_font: pygame.font.Font,
+    metrics_panel: pygame.Rect,
+    speed_kmh: float,
+    accel_mag: float,
+    steering: float,
+    high_speed_warning: bool,
+) -> None:
+    _draw_panel(screen, metrics_panel, (49, 61, 79))
+    section_color = (174, 188, 211)
+    metrics_title = section_font.render("VEHICLE METRICS", True, section_color)
+    screen.blit(metrics_title, (metrics_panel.left + 12, metrics_panel.top + 10))
+
+    metric_y = metrics_panel.top + 38
+    speed_label = label_font.render("Speed", True, (150, 164, 186))
+    accel_label = label_font.render("Acceleration (|a|)", True, (150, 164, 186))
+    steer_label = label_font.render("Steering", True, (150, 164, 186))
+    speed_value_color = (255, 182, 74) if high_speed_warning else (236, 242, 252)
+    speed_value = speed_metric_font.render(f"{speed_kmh:.1f} km/h", True, speed_value_color)
+    accel_value = metric_font.render(f"{accel_mag:.2f} m/s^2", True, (228, 233, 241))
+    steer_value = metric_font.render(f"{steering:.3f}", True, (228, 233, 241))
+
+    speed_x = metrics_panel.left + 12
+    accel_x = metrics_panel.left + metrics_panel.width // 3 + 8
+    steer_x = metrics_panel.left + (2 * metrics_panel.width) // 3 + 8
+    screen.blit(speed_label, (speed_x, metric_y))
+    screen.blit(accel_label, (accel_x, metric_y))
+    screen.blit(steer_label, (steer_x, metric_y))
+    screen.blit(speed_value, (speed_x, metric_y + 14))
+    screen.blit(accel_value, (accel_x, metric_y + 16))
+    screen.blit(steer_value, (steer_x, metric_y + 16))
+
+
+def _draw_events_panel(
+    screen: pygame.Surface,
+    section_font: pygame.font.Font,
+    value_font: pygame.font.Font,
+    events_panel: pygame.Rect,
+    events: list[str],
+) -> None:
+    _draw_panel(screen, events_panel, (49, 61, 79))
+    section_color = (174, 188, 211)
+    events_title = section_font.render("EVENTS", True, section_color)
+    screen.blit(events_title, (events_panel.left + 12, events_panel.top + 10))
+
+    event_start_x = events_panel.left + 12
+    event_start_y = events_panel.top + 34
+    event_lines = events[:RECENT_EVENT_LIMIT] if events else ["(none)"]
+    for index, event_line in enumerate(event_lines):
+        event_surface = value_font.render(event_line, True, (211, 219, 233))
+        screen.blit(event_surface, (event_start_x, event_start_y + index * 20))
 
 
 def _render(
@@ -303,72 +419,46 @@ def _render(
 
     status_color = (86, 214, 128) if status == "RUNNING" else (235, 98, 98) if status == "STOPPED" else (229, 233, 240)
     short_run_id = _truncate_middle(run_id) if run_id != "-" else run_id
-    title_surface = title_font.render("CARLA Observability Toolkit", True, (228, 233, 241))
-    subtitle_surface = label_font.render("Client Telemetry Dashboard", True, (150, 164, 186))
-    screen.blit(title_surface, (14, 10))
-    screen.blit(subtitle_surface, (14, 34))
+    _draw_header(screen, title_font, label_font)
 
     panel_width = screen.get_width() - 24
     run_panel = pygame.Rect(12, 70, panel_width, 156)
     metrics_panel = pygame.Rect(12, 244, panel_width, 94)
     events_panel = pygame.Rect(12, 356, panel_width, 98)
-    _draw_panel(screen, run_panel, (49, 61, 79))
-    _draw_panel(screen, metrics_panel, (49, 61, 79))
-    _draw_panel(screen, events_panel, (49, 61, 79))
 
-    section_color = (174, 188, 211)
-    run_title = section_font.render("RUN INFO", True, section_color)
-    metrics_title = section_font.render("VEHICLE METRICS", True, section_color)
-    events_title = section_font.render("EVENTS", True, section_color)
-    screen.blit(run_title, (run_panel.left + 12, run_panel.top + 10))
-    screen.blit(metrics_title, (metrics_panel.left + 12, metrics_panel.top + 10))
-    screen.blit(events_title, (events_panel.left + 12, events_panel.top + 10))
-
-    status_label = label_font.render("Run Status", True, (150, 164, 186))
-    status_value = section_font.render(status, True, status_color)
-    screen.blit(status_label, (run_panel.left + 12, run_panel.top + 38))
-    screen.blit(status_value, (run_panel.left + 172, run_panel.top + 36))
-    _draw_kv_rows(
-        screen,
-        label_font,
-        value_font,
-        pygame.Rect(run_panel.left + 12, run_panel.top + 64, run_panel.width - 24, 84),
-        [
-            ("Run ID", short_run_id),
-            ("Experiment", experiment_id),
-            ("Config", config_name),
-            ("Scenario", scenario_label),
-            ("Seed", seed),
-        ],
-        row_height=19,
+    _draw_run_panel(
+        screen=screen,
+        section_font=section_font,
+        label_font=label_font,
+        value_font=value_font,
+        run_panel=run_panel,
+        status=status,
+        status_color=status_color,
+        short_run_id=short_run_id,
+        experiment_id=experiment_id,
+        config_name=config_name,
+        scenario_label=scenario_label,
+        seed=seed,
     )
-
-    metric_y = metrics_panel.top + 38
-    speed_label = label_font.render("Speed", True, (150, 164, 186))
-    accel_label = label_font.render("Acceleration (|a|)", True, (150, 164, 186))
-    steer_label = label_font.render("Steering", True, (150, 164, 186))
-    speed_value_color = (255, 182, 74) if high_speed_warning else (236, 242, 252)
-    speed_value = speed_metric_font.render(f"{speed_kmh:.1f} km/h", True, speed_value_color)
-    accel_value = metric_font.render(f"{accel_mag:.2f} m/s^2", True, (228, 233, 241))
-    steer_value = metric_font.render(f"{steering:.3f}", True, (228, 233, 241))
-
-    speed_x = metrics_panel.left + 12
-    accel_x = metrics_panel.left + metrics_panel.width // 3 + 8
-    steer_x = metrics_panel.left + (2 * metrics_panel.width) // 3 + 8
-    screen.blit(speed_label, (speed_x, metric_y))
-    screen.blit(accel_label, (accel_x, metric_y))
-    screen.blit(steer_label, (steer_x, metric_y))
-    screen.blit(speed_value, (speed_x, metric_y + 14))
-    screen.blit(accel_value, (accel_x, metric_y + 16))
-    screen.blit(steer_value, (steer_x, metric_y + 16))
-
-    event_start_x = events_panel.left + 12
-    event_start_y = events_panel.top + 34
-    event_lines = events[:3] if events else ["(none)"]
-
-    for index, event_line in enumerate(event_lines):
-        event_surface = value_font.render(event_line, True, (211, 219, 233))
-        screen.blit(event_surface, (event_start_x, event_start_y + index * 20))
+    _draw_metrics_panel(
+        screen=screen,
+        section_font=section_font,
+        label_font=label_font,
+        metric_font=metric_font,
+        speed_metric_font=speed_metric_font,
+        metrics_panel=metrics_panel,
+        speed_kmh=speed_kmh,
+        accel_mag=accel_mag,
+        steering=steering,
+        high_speed_warning=high_speed_warning,
+    )
+    _draw_events_panel(
+        screen=screen,
+        section_font=section_font,
+        value_font=value_font,
+        events_panel=events_panel,
+        events=events,
+    )
     _draw_alerts(screen, value_font, alerts)
     pygame.display.flip()
 
@@ -388,7 +478,7 @@ def _apply_config_weather(world, config) -> None:
 def main() -> None:
     pygame.init()
     pygame.display.set_caption("CARLA Run Controls")
-    screen = pygame.display.set_mode((620, 470))
+    screen = pygame.display.set_mode(DASHBOARD_WINDOW_SIZE)
     title_font = pygame.font.Font(None, 28)
     section_font = pygame.font.Font(None, 24)
     label_font = pygame.font.Font(None, 20)
@@ -418,7 +508,7 @@ def main() -> None:
         nonlocal vehicle_collector, event_collector, collector_thread
         collector_stop.set()
         if collector_thread is not None:
-            collector_thread.join(timeout=2.0)
+            collector_thread.join(timeout=COLLECTOR_JOIN_TIMEOUT_S)
             collector_thread = None
         vehicle_collector = None
         if event_collector is not None and hasattr(event_collector, "close"):
@@ -428,7 +518,7 @@ def main() -> None:
     def tick_vehicle_metrics() -> None:
         while not collector_stop.is_set():
             try:
-                snapshot = world.wait_for_tick(0.25)
+                snapshot = world.wait_for_tick(COLLECTOR_WAIT_FOR_TICK_TIMEOUT_S)
             except Exception:
                 continue
             if snapshot is None or vehicle_collector is None:
@@ -601,7 +691,7 @@ def main() -> None:
                 speed_metric_font,
                 dashboard,
             )
-            clock.tick(30)
+            clock.tick(DASHBOARD_FPS)
     finally:
         if run_manager.is_running():
             state = run_manager.stop_run()

@@ -15,6 +15,10 @@ EXPECTED_METRICS_HEADERS = [field.name for field in fields(RunMetricRow)]
 REQUIRED_FILES = ("metadata.json", "metrics.csv", "events.json")
 REQUIRED_METADATA_FIELDS = ("run_id", "started_at_utc", "status")
 TERMINAL_RUN_STATUSES = {"stopped", "aborted"}
+CSV_FIRST_DATA_ROW_INDEX = 2
+METRICS_WALL_DURATION_MAX_LEAD_S = 5.0
+WALL_DURATION_DRIFT_ABS_THRESHOLD_S = 15.0
+WALL_DURATION_DRIFT_RATIO_THRESHOLD = 0.5
 
 
 @dataclass(slots=True)
@@ -216,7 +220,7 @@ def validate_run_directory(run_path: str | Path) -> dict[str, Any]:
                         f"Expected: {EXPECTED_METRICS_HEADERS}. Found: {metrics_header}"
                     )
 
-                for row_index, row in enumerate(rows[1:], start=2):
+                for row_index, row in enumerate(rows[1:], start=CSV_FIRST_DATA_ROW_INDEX):
                     if not row or all(cell.strip() == "" for cell in row):
                         metrics_errors.append(
                             f"metrics.csv row {row_index} is blank/malformed."
@@ -239,7 +243,9 @@ def validate_run_directory(run_path: str | Path) -> dict[str, Any]:
             try:
                 with metrics_path.open("r", newline="", encoding="utf-8") as file_obj:
                     dict_reader = csv.DictReader(file_obj)
-                    for row_index, row in enumerate(dict_reader, start=2):
+                    for row_index, row in enumerate(
+                        dict_reader, start=CSV_FIRST_DATA_ROW_INDEX
+                    ):
                         if row is None:
                             metrics_errors.append(f"metrics.csv row {row_index} is missing.")
                             continue
@@ -468,11 +474,15 @@ def validate_run_directory(run_path: str | Path) -> dict[str, Any]:
             if wall_duration < 0:
                 consistency_errors.append("Metadata wall-clock duration is negative.")
             if metrics_duration is not None:
-                if metrics_duration > wall_duration + 5.0:
+                if metrics_duration > wall_duration + METRICS_WALL_DURATION_MAX_LEAD_S:
                     consistency_errors.append(
-                        "Metrics duration exceeds metadata wall duration by more than 5 seconds."
+                        "Metrics duration exceeds metadata wall duration by more than "
+                        "5 seconds."
                     )
-                elif abs(metrics_duration - wall_duration) > max(15.0, wall_duration * 0.5):
+                elif abs(metrics_duration - wall_duration) > max(
+                    WALL_DURATION_DRIFT_ABS_THRESHOLD_S,
+                    wall_duration * WALL_DURATION_DRIFT_RATIO_THRESHOLD,
+                ):
                     consistency_warnings.append(
                         "Metrics duration differs significantly from metadata wall duration."
                     )

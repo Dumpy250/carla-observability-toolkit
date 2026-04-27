@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from dataclasses import field
 from math import sqrt
 from threading import Event, Lock, Thread
+from time import monotonic
 from typing import Optional
 
 import pygame
@@ -25,6 +26,18 @@ from cot.core.experiment_config import load_experiment_config
 from cot.core.run_manager import RunManager
 from cot.core.vehicle_metrics_collector import VehicleMetricsCollector
 
+SPEED_WARNING_THRESHOLD_KMH = 80.0
+MAX_ACTIVE_ALERTS = 3
+DEFAULT_ALERT_DURATION_S = 1.8
+
+
+@dataclass
+class DashboardAlert:
+    key: str
+    text: str
+    color: tuple[int, int, int]
+    expires_at: float
+
 
 @dataclass
 class DashboardState:
@@ -37,7 +50,9 @@ class DashboardState:
     speed_kmh: float = 0.0
     acceleration_magnitude: float = 0.0
     steering: float = 0.0
+    high_speed_warning: bool = False
     events: list[str] = field(default_factory=list)
+    alerts: list[DashboardAlert] = field(default_factory=list)
     _lock: Lock = field(default_factory=Lock, repr=False)
 
     def set_run(self, status: str, run_id: Optional[str]) -> None:
@@ -52,6 +67,8 @@ class DashboardState:
                 self.speed_kmh = 0.0
                 self.acceleration_magnitude = 0.0
                 self.steering = 0.0
+                self.high_speed_warning = False
+                self.alerts = []
 
     def set_experiment_metadata(
         self,
@@ -81,6 +98,16 @@ class DashboardState:
             self.speed_kmh = speed_mps * 3.6
             self.acceleration_magnitude = sqrt(ax * ax + ay * ay + az * az)
             self.steering = steering
+            self.high_speed_warning = self.speed_kmh >= SPEED_WARNING_THRESHOLD_KMH
+            if self.high_speed_warning:
+                self._upsert_alert_locked(
+                    key="high_speed",
+                    text="HIGH SPEED",
+                    color=(255, 176, 64),
+                    duration_s=0.5,
+                )
+            else:
+                self._remove_alert_locked("high_speed")
 
     def push_event(self, message: TelemetryMessage) -> None:
         payload = message.payload if isinstance(message.payload, dict) else {}
@@ -96,9 +123,50 @@ class DashboardState:
             self.events.insert(0, event_line)
             if len(self.events) > 3:
                 self.events = self.events[:3]
+            if event_type == "collision":
+                self._upsert_alert_locked(
+                    key="collision",
+                    text="COLLISION DETECTED",
+                    color=(235, 98, 98),
+                    duration_s=DEFAULT_ALERT_DURATION_S,
+                )
+            elif event_type == "lane_invasion":
+                self._upsert_alert_locked(
+                    key="lane_invasion",
+                    text="LANE INVASION",
+                    color=(230, 193, 107),
+                    duration_s=1.5,
+                )
 
-    def snapshot(self) -> tuple[str, str, str, str, str, str, float, float, float, list[str]]:
+    def _upsert_alert_locked(
+        self,
+        key: str,
+        text: str,
+        color: tuple[int, int, int],
+        duration_s: float,
+    ) -> None:
+        now = monotonic()
+        expires_at = now + max(0.1, duration_s)
+        self.alerts = [alert for alert in self.alerts if alert.expires_at > now]
+        for alert in self.alerts:
+            if alert.key == key:
+                alert.text = text
+                alert.color = color
+                alert.expires_at = expires_at
+                self.alerts.sort(key=lambda existing: existing.expires_at, reverse=True)
+                return
+        self.alerts.insert(0, DashboardAlert(key=key, text=text, color=color, expires_at=expires_at))
+        self.alerts = self.alerts[:MAX_ACTIVE_ALERTS]
+
+    def _remove_alert_locked(self, key: str) -> None:
+        self.alerts = [alert for alert in self.alerts if alert.key != key]
+
+    def snapshot(
+        self,
+    ) -> tuple[str, str, str, str, str, str, float, float, float, bool, list[str], list[DashboardAlert]]:
         with self._lock:
+            now = monotonic()
+            self.alerts = [alert for alert in self.alerts if alert.expires_at > now]
             return (
                 self.status,
                 self.run_id,
@@ -109,7 +177,9 @@ class DashboardState:
                 self.speed_kmh,
                 self.acceleration_magnitude,
                 self.steering,
+                self.high_speed_warning,
                 list(self.events),
+                [DashboardAlert(alert.key, alert.text, alert.color, alert.expires_at) for alert in self.alerts],
             )
 
 
@@ -174,6 +244,37 @@ def _draw_kv_rows(
         y += row_height
 
 
+def _draw_alerts(
+    screen: pygame.Surface,
+    alert_font: pygame.font.Font,
+    alerts: list[DashboardAlert],
+) -> None:
+    if not alerts:
+        return
+    now = monotonic()
+    banner_y = 46
+    banner_height = 20
+    max_visible = min(len(alerts), 2)
+    for index in range(max_visible):
+        alert = alerts[index]
+        remaining = max(0.0, alert.expires_at - now)
+        alpha_ratio = min(1.0, remaining / DEFAULT_ALERT_DURATION_S)
+        alpha = int(60 + 150 * alpha_ratio)
+        text_surface = alert_font.render(alert.text, True, alert.color)
+        banner_width = min(screen.get_width() - 24, text_surface.get_width() + 20)
+        banner_x = (screen.get_width() - banner_width) // 2
+        y = banner_y + index * (banner_height + 4)
+        banner_surface = pygame.Surface((banner_width, banner_height), pygame.SRCALPHA)
+        border_surface = pygame.Surface((banner_width, banner_height), pygame.SRCALPHA)
+        banner_surface.fill((24, 30, 40, alpha))
+        border_surface.fill((0, 0, 0, 0))
+        pygame.draw.rect(border_surface, (*alert.color, min(220, alpha + 40)), border_surface.get_rect(), width=1, border_radius=5)
+        screen.blit(banner_surface, (banner_x, y))
+        screen.blit(border_surface, (banner_x, y))
+        text_x = banner_x + max(10, (banner_width - text_surface.get_width()) // 2)
+        screen.blit(text_surface, (text_x, y + 2))
+
+
 def _render(
     screen: pygame.Surface,
     title_font: pygame.font.Font,
@@ -195,7 +296,9 @@ def _render(
         speed_kmh,
         accel_mag,
         steering,
+        high_speed_warning,
         events,
+        alerts,
     ) = dashboard.snapshot()
 
     status_color = (86, 214, 128) if status == "RUNNING" else (235, 98, 98) if status == "STOPPED" else (229, 233, 240)
@@ -244,7 +347,8 @@ def _render(
     speed_label = label_font.render("Speed", True, (150, 164, 186))
     accel_label = label_font.render("Acceleration (|a|)", True, (150, 164, 186))
     steer_label = label_font.render("Steering", True, (150, 164, 186))
-    speed_value = speed_metric_font.render(f"{speed_kmh:.1f} km/h", True, (236, 242, 252))
+    speed_value_color = (255, 182, 74) if high_speed_warning else (236, 242, 252)
+    speed_value = speed_metric_font.render(f"{speed_kmh:.1f} km/h", True, speed_value_color)
     accel_value = metric_font.render(f"{accel_mag:.2f} m/s^2", True, (228, 233, 241))
     steer_value = metric_font.render(f"{steering:.3f}", True, (228, 233, 241))
 
@@ -265,6 +369,7 @@ def _render(
     for index, event_line in enumerate(event_lines):
         event_surface = value_font.render(event_line, True, (211, 219, 233))
         screen.blit(event_surface, (event_start_x, event_start_y + index * 20))
+    _draw_alerts(screen, value_font, alerts)
     pygame.display.flip()
 
 

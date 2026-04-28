@@ -5,24 +5,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
-def _find_repo_root() -> Path:
-    return next(
-        (
-            parent
-            for parent in Path(__file__).resolve().parents
-            if (parent / "README.md").exists() and (parent / "src").is_dir()
-        ),
-        Path(__file__).resolve().parents[1],
-    )
-
-
-REPO_ROOT = _find_repo_root()
-SRC_DIR = REPO_ROOT / "src"
+SRC_DIR = Path(__file__).resolve().parents[1] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from cot.core.run_validator import validate_run_directory
+from cot.runtime.path_utils import find_repo_root, resolve_run_directory
+from cot.runtime.run_validator import validate_run_directory
+
+REPO_ROOT = find_repo_root(__file__)
 
 
 def find_latest_run_dir(runs_dir: Path) -> Path | None:
@@ -34,21 +24,12 @@ def find_latest_run_dir(runs_dir: Path) -> Path | None:
 
 def resolve_run_dir(run_input: str | None) -> Path:
     if run_input:
-        candidate = Path(run_input).expanduser()
-        if candidate.is_absolute() and candidate.is_dir():
-            return candidate.resolve()
-
-        cwd_candidate = (Path.cwd() / candidate).resolve()
-        if cwd_candidate.is_dir():
-            return cwd_candidate
-
-        runs_candidate = (REPO_ROOT / "runs" / candidate).resolve()
-        if runs_candidate.is_dir():
-            return runs_candidate
-
-        raise FileNotFoundError(
-            "Run directory not found. Checked: "
-            f"{candidate}, {cwd_candidate}, and {runs_candidate}"
+        return resolve_run_directory(
+            run_input=run_input,
+            runs_dir=REPO_ROOT / "runs",
+            resolve_absolute=True,
+            absolute_not_found_message=None,
+            include_candidate_in_checked_message=True,
         )
 
     runs_dir = REPO_ROOT / "runs"
@@ -118,4 +99,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

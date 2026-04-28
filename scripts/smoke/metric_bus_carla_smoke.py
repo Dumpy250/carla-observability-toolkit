@@ -6,12 +6,12 @@ import time
 
 import carla
 
-PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[3]
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
 SRC_DIR = PROJECT_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from cot.core.metric_bus import MetricBus, TelemetryMessage
+from cot.bus.metric_bus import MetricBus, TelemetryMessage
 
 
 def main() -> None:

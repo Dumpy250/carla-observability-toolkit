@@ -4,8 +4,8 @@ from math import sqrt
 
 import carla
 
-from .metric_bus import MetricBus, TelemetryMessage
-from .vehicle_spawner import VehicleSpawner
+from cot.bus.metric_bus import MetricBus, TelemetryMessage
+from cot.carla.vehicle_spawner import VehicleSpawner
 
 
 class VehicleMetricsCollector:

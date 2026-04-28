@@ -1,4 +1,4 @@
-"""Core primitives for the observability toolkit."""
+"""Telemetry bus package."""
 
 from cot.bus.metric_bus import MetricBus, Subscription, TelemetryMessage
 

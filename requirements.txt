@@ -1,2 +1,11 @@
-# Core
+# Core CARLA integration
 carla
+
+# Client dashboard
+pygame
+
+# Web dashboard
+flask
+
+# Testing
+pytest

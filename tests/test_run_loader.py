@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -9,50 +10,55 @@ SRC_DIR = REPO_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from cot.core.run_data_loader import RunDataLoader
+from cot.runtime.run_data_loader import RunDataLoader
 
+def test_run_data_loader_loads_minimal_fake_run(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run_001"
+    run_dir.mkdir()
 
-def find_latest_run_dir(runs_dir: Path) -> Path | None:
-    """Return the most recently modified run directory, if one exists."""
-    run_dirs = [path for path in runs_dir.iterdir() if path.is_dir()]
-    if not run_dirs:
-        return None
-    return max(run_dirs, key=lambda path: path.stat().st_mtime)
+    (run_dir / "metadata.json").write_text(
+        json.dumps(
+            {
+                "run_id": "run-001",
+                "started_at_utc": "2026-01-01T00:00:00+00:00",
+                "status": "stopped",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (run_dir / "metrics.csv").write_text(
+        "\n".join(
+            [
+                "frame,sim_time_s,speed_mps,acceleration_x,acceleration_y,acceleration_z,steering,throttle,brake,position_x,position_y,position_z,heading",
+                "1,0.0,10.0,0.1,0.0,0.0,0.01,0.3,0.0,100.0,200.0,1.0,90.0",
+                "2,0.1,12.0,0.2,0.1,0.0,0.02,0.4,0.0,101.0,200.5,1.0,91.0",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (run_dir / "events.json").write_text(
+        json.dumps(
+            [
+                {
+                    "run_id": "run-001",
+                    "frame": 1,
+                    "type": "run_started",
+                    "sim_time_s": 0.0,
+                },
+                {
+                    "run_id": "run-001",
+                    "frame": 2,
+                    "type": "collision",
+                    "sim_time_s": 0.1,
+                },
+            ]
+        ),
+        encoding="utf-8",
+    )
 
+    run_data = RunDataLoader().load_run(run_dir)
 
-def main() -> int:
-    runs_dir = REPO_ROOT / "runs"
-    if not runs_dir.exists() or not runs_dir.is_dir():
-        print(f"Runs directory does not exist: {runs_dir}")
-        return 1
-
-    latest_run = find_latest_run_dir(runs_dir)
-    if latest_run is None:
-        print(f"No run directories found in: {runs_dir}")
-        return 1
-
-    loader = RunDataLoader()
-    try:
-        run_data = loader.load_run(latest_run)
-    except Exception as exc:
-        print(f"Failed to load run data from {latest_run}: {exc}")
-        return 1
-
-    print("Run directory:", run_data.run_dir)
-    print("Run ID:", run_data.metadata.get("run_id"))
-    print("Run status:", run_data.metadata.get("status"))
-    print("Metric rows:", len(run_data.metrics))
-    print("Event rows:", len(run_data.events))
-
-    if run_data.metrics:
-        print("First metric row:", run_data.metrics[0])
-
-    if run_data.events:
-        print("First event:", run_data.events[0])
-
-    print("RunDataLoader smoke test completed successfully.")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+    assert run_data.metadata.get("run_id") == "run-001"
+    assert len(run_data.metrics) == 2
+    assert len(run_data.events) == 2

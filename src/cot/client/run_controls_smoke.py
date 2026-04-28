@@ -17,14 +17,14 @@ SRC_DIR = PROJECT_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from cot.carla_client import make_client
-from cot.core.event_collector import EventCollector
-from cot.core.logger import RunLogger
-from cot.core.metric_bus import MetricBus
-from cot.core.metric_bus import TelemetryMessage
-from cot.core.experiment_config import load_experiment_config
-from cot.core.run_manager import RunManager
-from cot.core.vehicle_metrics_collector import VehicleMetricsCollector
+from cot.bus.metric_bus import MetricBus
+from cot.bus.metric_bus import TelemetryMessage
+from cot.carla.client import make_client
+from cot.collectors.event_collector import EventCollector
+from cot.collectors.vehicle_metrics_collector import VehicleMetricsCollector
+from cot.config.experiment_config import load_experiment_config
+from cot.runtime.logger import RunLogger
+from cot.runtime.run_manager import RunManager
 
 SPEED_WARNING_THRESHOLD_KMH = 80.0
 MAX_ACTIVE_ALERTS = 3

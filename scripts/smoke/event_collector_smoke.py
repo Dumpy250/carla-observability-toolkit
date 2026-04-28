@@ -3,17 +3,17 @@ from __future__ import annotations
 import pathlib
 import sys
 
-PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[3]
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
 SRC_DIR = PROJECT_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from cot.carla_client import make_client
-from cot.core.event_collector import EventCollector
-from cot.core.logger import RunLogger
-from cot.core.metric_bus import MetricBus, TelemetryMessage
-from cot.core.run_manager import RunManager
-from cot.core.vehicle_spawner import VehicleSpawner
+from cot.bus.metric_bus import MetricBus, TelemetryMessage
+from cot.carla.client import make_client
+from cot.carla.vehicle_spawner import VehicleSpawner
+from cot.collectors.event_collector import EventCollector
+from cot.runtime.logger import RunLogger
+from cot.runtime.run_manager import RunManager
 
 
 def main() -> None:

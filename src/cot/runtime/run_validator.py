@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from cot.core.run_data_loader import RunDataLoader, RunMetricRow, _parse_float, _parse_int
+from cot.runtime.run_data_loader import RunDataLoader, RunMetricRow, _parse_float, _parse_int
 
 
 EXPECTED_METRICS_HEADERS = [field.name for field in fields(RunMetricRow)]

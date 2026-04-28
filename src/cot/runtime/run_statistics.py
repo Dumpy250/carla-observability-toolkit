@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from cot.core.run_data_loader import LoadedRunData, RunMetricRow
+from cot.runtime.run_data_loader import LoadedRunData, RunMetricRow
 
 
 @dataclass(slots=True)

@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from .metric_bus import MetricBus, Subscription, TelemetryMessage
+from cot.bus.metric_bus import MetricBus, Subscription, TelemetryMessage
 
 
 class RunLogger:

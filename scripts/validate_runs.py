@@ -9,8 +9,8 @@ SRC_DIR = Path(__file__).resolve().parents[1] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from cot.core.path_utils import find_repo_root, resolve_run_directory
-from cot.core.run_validator import validate_run_directory
+from cot.runtime.path_utils import find_repo_root, resolve_run_directory
+from cot.runtime.run_validator import validate_run_directory
 
 REPO_ROOT = find_repo_root(__file__)
 

@@ -15,8 +15,8 @@ RUNS_DIR = REPO_ROOT / "runs"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from cot.core.run_data_loader import RunDataLoader
-from cot.core.run_statistics import compute_run_summary
+from cot.runtime.run_data_loader import RunDataLoader
+from cot.runtime.run_statistics import compute_run_summary
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 loader = RunDataLoader()

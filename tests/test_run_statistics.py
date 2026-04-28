@@ -8,51 +8,88 @@ SRC_DIR = REPO_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from cot.core.run_data_loader import RunDataLoader
-from cot.core.run_statistics import compute_run_summary
+from cot.runtime.run_data_loader import LoadedRunData
+from cot.runtime.run_data_loader import RunEvent
+from cot.runtime.run_data_loader import RunMetricRow
+from cot.runtime.run_statistics import compute_run_summary
 
-
-def find_latest_run_dir(runs_dir: Path) -> Path | None:
-    """Return the most recently modified run directory from runs/."""
-    run_dirs = [path for path in runs_dir.iterdir() if path.is_dir()]
-    if not run_dirs:
-        return None
-    return max(run_dirs, key=lambda path: path.stat().st_mtime)
-
-
-def main() -> int:
-    """Load the newest run and print computed summary statistics."""
-    runs_dir = REPO_ROOT / "runs"
-    if not runs_dir.exists() or not runs_dir.is_dir():
-        print(f"Runs directory does not exist: {runs_dir}")
-        return 1
-
-    latest_run = find_latest_run_dir(runs_dir)
-    if latest_run is None:
-        print(f"No run directories found in: {runs_dir}")
-        return 1
-
-    loader = RunDataLoader()
-    try:
-        run_data = loader.load_run(latest_run)
-    except Exception as exc:
-        print(f"Failed to load run data from {latest_run}: {exc}")
-        return 1
+def test_compute_run_summary_with_synthetic_data() -> None:
+    run_data = LoadedRunData(
+        run_dir=Path("/tmp/fake_run"),
+        metadata={
+            "run_id": "run-summary-1",
+            "started_at_utc": "2026-01-01T00:00:00+00:00",
+            "status": "stopped",
+        },
+        metrics=[
+            RunMetricRow(
+                frame=1,
+                sim_time_s=0.0,
+                speed_mps=10.0,
+                acceleration_x=0.0,
+                acceleration_y=0.0,
+                acceleration_z=0.0,
+                steering=0.0,
+                throttle=0.2,
+                brake=0.0,
+                position_x=0.0,
+                position_y=0.0,
+                position_z=0.0,
+                heading=0.0,
+            ),
+            RunMetricRow(
+                frame=2,
+                sim_time_s=1.0,
+                speed_mps=20.0,
+                acceleration_x=0.0,
+                acceleration_y=0.0,
+                acceleration_z=0.0,
+                steering=0.1,
+                throttle=0.3,
+                brake=0.0,
+                position_x=1.0,
+                position_y=0.0,
+                position_z=0.0,
+                heading=5.0,
+            ),
+            RunMetricRow(
+                frame=3,
+                sim_time_s=2.0,
+                speed_mps=30.0,
+                acceleration_x=0.0,
+                acceleration_y=0.0,
+                acceleration_z=0.0,
+                steering=0.2,
+                throttle=0.4,
+                brake=0.0,
+                position_x=2.0,
+                position_y=0.0,
+                position_z=0.0,
+                heading=10.0,
+            ),
+        ],
+        events=[
+            RunEvent(
+                run_id="run-summary-1",
+                frame=2,
+                event_type="collision",
+                sim_time_s=1.5,
+                payload={"type": "collision"},
+            ),
+            RunEvent(
+                run_id="run-summary-1",
+                frame=3,
+                event_type="lane_invasion",
+                sim_time_s=1.8,
+                payload={"type": "lane_invasion"},
+            ),
+        ],
+    )
 
     summary = compute_run_summary(run_data)
 
-    print("Run directory:", run_data.run_dir)
-    print("max_speed_mps:", summary.max_speed_mps)
-    print("avg_speed_mps:", summary.avg_speed_mps)
-    print("total_collisions:", summary.total_collisions)
-    print("run_duration_s:", summary.run_duration_s)
-    print("avg_acceleration_mps2:", summary.avg_acceleration_mps2)
-    print("metric_row_count:", summary.metric_row_count)
-    print("event_count:", summary.event_count)
-
-    print("Run statistics smoke test completed successfully.")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+    assert summary.max_speed_mps == 30.0
+    assert summary.avg_speed_mps == 20.0
+    assert summary.total_collisions == 1
+    assert summary.event_count == 2
+    assert summary.metric_row_count == 3

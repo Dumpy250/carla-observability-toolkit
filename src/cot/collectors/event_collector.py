@@ -4,7 +4,7 @@ from math import sqrt
 
 import carla
 
-from .metric_bus import MetricBus, TelemetryMessage
+from cot.bus.metric_bus import MetricBus, TelemetryMessage
 
 
 class EventCollector:

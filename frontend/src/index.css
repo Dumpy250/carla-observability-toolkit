@@ -1,0 +1,175 @@
+:root {
+  font-family: Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  color: #e5e7eb;
+  background-color: #0b1220;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #0b1220;
+  color: #e5e7eb;
+}
+
+#root {
+  width: min(1440px, 100%);
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.dashboard {
+  display: grid;
+  gap: 16px;
+}
+
+.panel {
+  background: #111a2e;
+  border: 1px solid #263350;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.panel-header {
+  display: grid;
+  gap: 12px;
+}
+
+.panel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.panel-telemetry {
+  display: grid;
+  gap: 12px;
+}
+
+h1,
+h2 {
+  margin: 0;
+  color: #f8fafc;
+  letter-spacing: 0;
+}
+
+h1 {
+  font-size: 1.5rem;
+}
+
+h2 {
+  font-size: 1.1rem;
+}
+
+p {
+  margin: 0;
+}
+
+ul,
+ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.run-selector-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.run-selector-row label {
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.run-selector-row select {
+  min-width: 440px;
+  max-width: 100%;
+  background: #0f172a;
+  color: #e5e7eb;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.status {
+  color: #cbd5e1;
+}
+
+.status-error {
+  color: #fca5a5;
+}
+
+.kv-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 8px 12px;
+}
+
+.kv-grid dt {
+  margin: 0;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.kv-grid dd {
+  margin: 0;
+  color: #e2e8f0;
+  overflow-wrap: anywhere;
+}
+
+.metric-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  color: #cbd5e1;
+}
+
+.metric-toggle-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.telemetry-chart-wrapper {
+  width: 100%;
+  min-height: 420px;
+  overflow-x: auto;
+  display: flex;
+  justify-content: center;
+  padding-bottom: 4px;
+}
+
+.recharts-wrapper .recharts-cartesian-axis-tick-value,
+.recharts-wrapper .recharts-legend-item-text {
+  fill: #cbd5e1;
+}
+
+.recharts-default-tooltip {
+  background-color: #0f172a !important;
+  border: 1px solid #334155 !important;
+}
+
+@media (max-width: 1000px) {
+  #root {
+    padding: 16px;
+  }
+
+  .panel-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .run-selector-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .run-selector-row select {
+    min-width: 0;
+    width: 100%;
+  }
+}

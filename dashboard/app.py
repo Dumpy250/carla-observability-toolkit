@@ -6,11 +6,13 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, jsonify, render_template
+from flask import Flask, Response, abort, jsonify, render_template, send_from_directory
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = REPO_ROOT / "src"
 RUNS_DIR = REPO_ROOT / "runs"
+FRONTEND_DIST_DIR = REPO_ROOT / "frontend" / "dist"
+FRONTEND_INDEX_PATH = FRONTEND_DIST_DIR / "index.html"
 
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
@@ -45,10 +47,16 @@ def _list_run_dirs() -> list[Path]:
     return run_dirs
 
 
-@app.get("/")
-def index() -> str:
-    """Render the dashboard shell page."""
-    return render_template("index.html")
+def _frontend_missing_response() -> Response:
+    """Return setup instructions when the React production build is missing."""
+    return Response(
+        "React dashboard build not found.\n\n"
+        "Run the following commands to build the frontend:\n"
+        "cd frontend\n"
+        "npm run build\n",
+        mimetype="text/plain",
+        status=503,
+    )
 
 
 @app.get("/api/runs")
@@ -91,6 +99,30 @@ def get_run_details(run_dir_name: str) -> Any:
             "events": [asdict(event) for event in run_data.events],
         }
     )
+
+
+@app.get("/legacy")
+def legacy_dashboard() -> str:
+    """Legacy Flask dashboard (deprecated, replaced by React)"""
+    return render_template("index.html")
+
+
+@app.get("/")
+@app.get("/<path:path>")
+def serve_dashboard(path: str = "") -> Response:
+    """Serve React dashboard build and support client-side routing."""
+    if path.startswith("api/"):
+        abort(404)
+
+    if not FRONTEND_INDEX_PATH.exists():
+        return _frontend_missing_response()
+
+    if path:
+        requested_path = (FRONTEND_DIST_DIR / path).resolve()
+        if FRONTEND_DIST_DIR.resolve() in requested_path.parents and requested_path.is_file():
+            return send_from_directory(str(FRONTEND_DIST_DIR), path)
+
+    return send_from_directory(str(FRONTEND_DIST_DIR), "index.html")
 
 
 if __name__ == "__main__":

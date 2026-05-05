@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   CartesianGrid,
   Legend,
@@ -8,6 +8,13 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import KeyValueGrid from '../components/KeyValueGrid.jsx'
+import MetricToggleRow from '../components/MetricToggleRow.jsx'
+import RunSelector from '../components/RunSelector.jsx'
+import StatusMessage from '../components/StatusMessage.jsx'
+import { fetchRunDetails, fetchRunsList } from '../services/runsApi.js'
+import { combineChartTimeDomain, normalizeComparisonMetrics } from '../utils/chartData.js'
+import { formatDelta, formatValue } from '../utils/formatters.js'
 
 const COMPARISON_FIELDS = [
   { key: 'max_speed_mps', label: 'max_speed_mps', digits: 3 },
@@ -16,6 +23,12 @@ const COMPARISON_FIELDS = [
   { key: 'run_duration_s', label: 'run_duration_s', digits: 3 },
   { key: 'metric_row_count', label: 'metric_row_count', digits: 0 },
   { key: 'event_count', label: 'event_count', digits: 0 },
+]
+
+const CONTROL_INPUT_METRICS = [
+  { key: 'throttle', label: 'Throttle' },
+  { key: 'brake', label: 'Brake' },
+  { key: 'steering', label: 'Steering' },
 ]
 
 function CompareRuns() {
@@ -43,14 +56,7 @@ function CompareRuns() {
       setRunsLoading(true)
       setRunsError('')
       try {
-        const response = await fetch('/api/runs')
-        if (!response.ok) {
-          throw new Error(`Request failed: ${response.status}`)
-        }
-
-        const data = await response.json()
-        const runList = Array.isArray(data) ? data : data?.runs
-        const normalizedRuns = Array.isArray(runList) ? runList : []
+        const normalizedRuns = await fetchRunsList()
         setRuns(normalizedRuns)
         setRunA(normalizedRuns[0]?.run_dir_name ?? '')
         setRunB(normalizedRuns[1]?.run_dir_name ?? normalizedRuns[0]?.run_dir_name ?? '')
@@ -74,11 +80,7 @@ function CompareRuns() {
       setDetailsLoadingA(true)
       setDetailsErrorA('')
       try {
-        const response = await fetch(`/api/runs/${encodeURIComponent(runA)}`)
-        if (!response.ok) {
-          throw new Error(`Request failed: ${response.status}`)
-        }
-        const data = await response.json()
+        const data = await fetchRunDetails(runA)
         setDetailsA(data)
       } catch (err) {
         setDetailsA(null)
@@ -101,11 +103,7 @@ function CompareRuns() {
       setDetailsLoadingB(true)
       setDetailsErrorB('')
       try {
-        const response = await fetch(`/api/runs/${encodeURIComponent(runB)}`)
-        if (!response.ok) {
-          throw new Error(`Request failed: ${response.status}`)
-        }
-        const data = await response.json()
+        const data = await fetchRunDetails(runB)
         setDetailsB(data)
       } catch (err) {
         setDetailsB(null)
@@ -124,52 +122,9 @@ function CompareRuns() {
   const metadataB = detailsB?.metadata ?? {}
   const metricsA = Array.isArray(detailsA?.metrics) ? detailsA.metrics : []
   const metricsB = Array.isArray(detailsB?.metrics) ? detailsB.metrics : []
-
-  const normalizeMetrics = (metrics) => {
-    const firstValidSimTime = metrics.find((row) => typeof row.sim_time_s === 'number')?.sim_time_s ?? 0
-    return metrics
-      .map((row) => {
-        const simTime =
-          typeof row.sim_time_s === 'number' && Number.isFinite(row.sim_time_s) ? row.sim_time_s : null
-        return {
-          chart_time_s: simTime === null ? null : simTime - firstValidSimTime,
-          speed_mps: typeof row.speed_mps === 'number' ? row.speed_mps : null,
-          throttle: typeof row.throttle === 'number' ? row.throttle : null,
-          brake: typeof row.brake === 'number' ? row.brake : null,
-          steering: typeof row.steering === 'number' ? row.steering : null,
-        }
-      })
-      .filter((row) => typeof row.chart_time_s === 'number' && Number.isFinite(row.chart_time_s))
-      .sort((a, b) => a.chart_time_s - b.chart_time_s)
-  }
-
-  const chartDataA = normalizeMetrics(metricsA)
-  const chartDataB = normalizeMetrics(metricsB)
-  const combinedTimeDomainData = (() => {
-    const uniqueTimes = new Set()
-    chartDataA.forEach((row) => uniqueTimes.add(row.chart_time_s))
-    chartDataB.forEach((row) => uniqueTimes.add(row.chart_time_s))
-    return [...uniqueTimes].sort((a, b) => a - b).map((value) => ({ chart_time_s: value }))
-  })()
-
-  const formatValue = (value, digits = 3) => {
-    if (value === null || value === undefined) {
-      return 'N/A'
-    }
-    if (typeof value !== 'number') {
-      return String(value)
-    }
-    return Number.isFinite(value) ? value.toFixed(digits) : 'N/A'
-  }
-
-  const formatDelta = (aValue, bValue, digits = 3) => {
-    if (typeof aValue !== 'number' || typeof bValue !== 'number') {
-      return 'N/A'
-    }
-    const delta = bValue - aValue
-    const sign = delta > 0 ? '+' : ''
-    return `${sign}${delta.toFixed(digits)}`
-  }
+  const chartDataA = normalizeComparisonMetrics(metricsA)
+  const chartDataB = normalizeComparisonMetrics(metricsB)
+  const combinedTimeDomainData = combineChartTimeDomain(chartDataA, chartDataB)
 
   const toggleMetric = (metricKey) => {
     setMetricVisibility((prev) => ({
@@ -199,84 +154,67 @@ function CompareRuns() {
       <section className="panel panel-header">
         <h1>Compare Runs</h1>
         <div className="compare-selector-grid">
-          <div className="run-selector-row">
-            <label htmlFor="run-a-select">Run A</label>
-            <select
-              id="run-a-select"
-              value={runA}
-              onChange={(event) => setRunA(event.target.value)}
-              disabled={runsLoading || runs.length === 0}
-            >
-              {runs.map((run) => (
-                <option key={`a-${run.run_dir_name}`} value={run.run_dir_name}>
-                  {run.run_dir_name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="run-selector-row">
-            <label htmlFor="run-b-select">Run B</label>
-            <select
-              id="run-b-select"
-              value={runB}
-              onChange={(event) => setRunB(event.target.value)}
-              disabled={runsLoading || runs.length === 0}
-            >
-              {runs.map((run) => (
-                <option key={`b-${run.run_dir_name}`} value={run.run_dir_name}>
-                  {run.run_dir_name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <RunSelector
+            id="run-a-select"
+            label="Run A"
+            value={runA}
+            onChange={setRunA}
+            disabled={runsLoading || runs.length === 0}
+            runs={runs}
+            optionKeyPrefix="a-"
+          />
+          <RunSelector
+            id="run-b-select"
+            label="Run B"
+            value={runB}
+            onChange={setRunB}
+            disabled={runsLoading || runs.length === 0}
+            runs={runs}
+            optionKeyPrefix="b-"
+          />
         </div>
       </section>
 
-      {runsLoading ? <p className="status">Loading runs...</p> : null}
-      {runsError ? <p className="status status-error">Error loading runs: {runsError}</p> : null}
-      {!runsLoading && !runsError && runs.length === 0 ? <p className="status">No runs available.</p> : null}
+      {runsLoading ? <StatusMessage>Loading runs...</StatusMessage> : null}
+      {runsError ? <StatusMessage error>Error loading runs: {runsError}</StatusMessage> : null}
+      {!runsLoading && !runsError && runs.length === 0 ? <StatusMessage>No runs available.</StatusMessage> : null}
 
-      {detailsLoadingA ? <p className="status">Loading Run A...</p> : null}
-      {detailsLoadingB ? <p className="status">Loading Run B...</p> : null}
-      {detailsErrorA ? <p className="status status-error">Error loading Run A: {detailsErrorA}</p> : null}
-      {detailsErrorB ? <p className="status status-error">Error loading Run B: {detailsErrorB}</p> : null}
+      {detailsLoadingA ? <StatusMessage>Loading Run A...</StatusMessage> : null}
+      {detailsLoadingB ? <StatusMessage>Loading Run B...</StatusMessage> : null}
+      {detailsErrorA ? <StatusMessage error>Error loading Run A: {detailsErrorA}</StatusMessage> : null}
+      {detailsErrorB ? <StatusMessage error>Error loading Run B: {detailsErrorB}</StatusMessage> : null}
 
       <div className="panel-grid">
         <section className="panel">
           <h2>Run A Summary</h2>
-          <dl className="kv-grid">
-            <dt>run_dir_name</dt>
-            <dd>{runA || 'N/A'}</dd>
-            <dt>run_id</dt>
-            <dd>{metadataA.run_id ?? 'N/A'}</dd>
-            <dt>status</dt>
-            <dd>{metadataA.status ?? 'N/A'}</dd>
-            {COMPARISON_FIELDS.map((field) => (
-              <Fragment key={`a-${field.key}`}>
-                <dt>{field.label}</dt>
-                <dd>{formatValue(summaryA[field.key], field.digits)}</dd>
-              </Fragment>
-            ))}
-          </dl>
+          <KeyValueGrid
+            entries={[
+              { key: 'a-run_dir_name', label: 'run_dir_name', value: runA || 'N/A' },
+              { key: 'a-run_id', label: 'run_id', value: metadataA.run_id ?? 'N/A' },
+              { key: 'a-status', label: 'status', value: metadataA.status ?? 'N/A' },
+              ...COMPARISON_FIELDS.map((field) => ({
+                key: `a-${field.key}`,
+                label: field.label,
+                value: formatValue(summaryA[field.key], field.digits),
+              })),
+            ]}
+          />
         </section>
 
         <section className="panel">
           <h2>Run B Summary</h2>
-          <dl className="kv-grid">
-            <dt>run_dir_name</dt>
-            <dd>{runB || 'N/A'}</dd>
-            <dt>run_id</dt>
-            <dd>{metadataB.run_id ?? 'N/A'}</dd>
-            <dt>status</dt>
-            <dd>{metadataB.status ?? 'N/A'}</dd>
-            {COMPARISON_FIELDS.map((field) => (
-              <Fragment key={`b-${field.key}`}>
-                <dt>{field.label}</dt>
-                <dd>{formatValue(summaryB[field.key], field.digits)}</dd>
-              </Fragment>
-            ))}
-          </dl>
+          <KeyValueGrid
+            entries={[
+              { key: 'b-run_dir_name', label: 'run_dir_name', value: runB || 'N/A' },
+              { key: 'b-run_id', label: 'run_id', value: metadataB.run_id ?? 'N/A' },
+              { key: 'b-status', label: 'status', value: metadataB.status ?? 'N/A' },
+              ...COMPARISON_FIELDS.map((field) => ({
+                key: `b-${field.key}`,
+                label: field.label,
+                value: formatValue(summaryB[field.key], field.digits),
+              })),
+            ]}
+          />
         </section>
       </div>
 
@@ -301,11 +239,11 @@ function CompareRuns() {
       <section className="panel panel-telemetry">
         <h2>Speed Comparison</h2>
         {!chartReady ? (
-          <p className="status">Load both runs to view telemetry comparison.</p>
+          <StatusMessage>Load both runs to view telemetry comparison.</StatusMessage>
         ) : !hasChartData ? (
-          <p className="status">
+          <StatusMessage>
             One or both selected runs have no metrics. Select runs with telemetry data.
-          </p>
+          </StatusMessage>
         ) : (
           <div className="telemetry-chart-wrapper compare-chart-wrapper">
             <LineChart
@@ -347,39 +285,18 @@ function CompareRuns() {
 
       <section className="panel panel-telemetry">
         <h2>Control Inputs Comparison</h2>
-        <div className="metric-toggle-row">
-          <label>
-            <input
-              type="checkbox"
-              checked={metricVisibility.throttle}
-              onChange={() => toggleMetric('throttle')}
-            />
-            Throttle
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={metricVisibility.brake}
-              onChange={() => toggleMetric('brake')}
-            />
-            Brake
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={metricVisibility.steering}
-              onChange={() => toggleMetric('steering')}
-            />
-            Steering
-          </label>
-        </div>
+        <MetricToggleRow
+          metrics={CONTROL_INPUT_METRICS}
+          visibility={metricVisibility}
+          onToggle={toggleMetric}
+        />
 
         {!chartReady ? (
-          <p className="status">Load both runs to view telemetry comparison.</p>
+          <StatusMessage>Load both runs to view telemetry comparison.</StatusMessage>
         ) : !hasChartData ? (
-          <p className="status">
+          <StatusMessage>
             One or both selected runs have no metrics. Select runs with telemetry data.
-          </p>
+          </StatusMessage>
         ) : (
           <div className="telemetry-chart-wrapper compare-chart-wrapper">
             <LineChart

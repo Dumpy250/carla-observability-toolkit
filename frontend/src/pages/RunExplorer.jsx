@@ -8,6 +8,20 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import KeyValueGrid from '../components/KeyValueGrid.jsx'
+import MetricToggleRow from '../components/MetricToggleRow.jsx'
+import RunSelector from '../components/RunSelector.jsx'
+import StatusMessage from '../components/StatusMessage.jsx'
+import { fetchRunDetails, fetchRunsList } from '../services/runsApi.js'
+import { normalizeRunExplorerMetrics, sortEventsByTimeline } from '../utils/chartData.js'
+import { formatCount, formatFixed } from '../utils/formatters.js'
+
+const EXPLORER_METRICS = [
+  { key: 'speed_mps', label: 'Speed' },
+  { key: 'throttle', label: 'Throttle' },
+  { key: 'brake', label: 'Brake' },
+  { key: 'steering', label: 'Steering' },
+]
 
 function RunExplorer() {
   const [runs, setRuns] = useState([])
@@ -29,14 +43,7 @@ function RunExplorer() {
       setRunsLoading(true)
       setRunsError('')
       try {
-        const response = await fetch('/api/runs')
-        if (!response.ok) {
-          throw new Error(`Request failed: ${response.status}`)
-        }
-
-        const data = await response.json()
-        const runList = Array.isArray(data) ? data : data?.runs
-        const normalizedRuns = Array.isArray(runList) ? runList : []
+        const normalizedRuns = await fetchRunsList()
         setRuns(normalizedRuns)
         setSelectedRun(normalizedRuns[0]?.run_dir_name ?? '')
       } catch (err) {
@@ -55,16 +62,11 @@ function RunExplorer() {
       return
     }
 
-    const fetchRunDetails = async () => {
+    const loadRunDetails = async () => {
       setDetailsLoading(true)
       setDetailsError('')
       try {
-        const response = await fetch(`/api/runs/${encodeURIComponent(selectedRun)}`)
-        if (!response.ok) {
-          throw new Error(`Request failed: ${response.status}`)
-        }
-
-        const data = await response.json()
+        const data = await fetchRunDetails(selectedRun)
         setRunDetails(data)
       } catch (err) {
         setRunDetails(null)
@@ -74,63 +76,21 @@ function RunExplorer() {
       }
     }
 
-    fetchRunDetails()
+    loadRunDetails()
   }, [selectedRun])
 
   const metadata = runDetails?.metadata ?? {}
   const summary = runDetails?.summary ?? {}
   const metrics = Array.isArray(runDetails?.metrics) ? runDetails.metrics : []
   const events = Array.isArray(runDetails?.events) ? runDetails.events : []
-  const firstValidSimTime = metrics.find((row) => typeof row.sim_time_s === 'number')?.sim_time_s ?? 0
-  const chartData = metrics
-    .map((row) => {
-      const simTime = typeof row.sim_time_s === 'number' ? row.sim_time_s : null
-      return {
-        sim_time_s: simTime,
-        chart_time_s: simTime === null ? null : simTime - firstValidSimTime,
-        speed_mps: typeof row.speed_mps === 'number' ? row.speed_mps : null,
-        throttle: typeof row.throttle === 'number' ? row.throttle : null,
-        brake: typeof row.brake === 'number' ? row.brake : null,
-        steering: typeof row.steering === 'number' ? row.steering : null,
-      }
-    })
-    .filter((row) => row.chart_time_s !== null)
-  const sortedEvents = [...events].sort((a, b) => {
-    const aSim = typeof a.sim_time_s === 'number' ? a.sim_time_s : null
-    const bSim = typeof b.sim_time_s === 'number' ? b.sim_time_s : null
-    if (aSim !== null && bSim !== null) {
-      return aSim - bSim
-    }
-    if (aSim !== null && bSim === null) {
-      return -1
-    }
-    if (aSim === null && bSim !== null) {
-      return 1
-    }
-    const aFrame = typeof a.frame === 'number' ? a.frame : Number.POSITIVE_INFINITY
-    const bFrame = typeof b.frame === 'number' ? b.frame : Number.POSITIVE_INFINITY
-    return aFrame - bFrame
-  })
+  const chartData = normalizeRunExplorerMetrics(metrics)
+  const sortedEvents = sortEventsByTimeline(events)
 
   const toggleMetric = (metricKey) => {
     setMetricVisibility((prev) => ({
       ...prev,
       [metricKey]: !prev[metricKey],
     }))
-  }
-
-  const formatFixed = (value, digits = 3) => {
-    if (typeof value !== 'number' || !Number.isFinite(value)) {
-      return 'N/A'
-    }
-    return value.toFixed(digits)
-  }
-
-  const formatCount = (value) => {
-    if (typeof value !== 'number' || !Number.isFinite(value)) {
-      return 'N/A'
-    }
-    return Math.round(value).toString()
   }
 
   const getEventBadgeClass = (eventType) => {
@@ -155,108 +115,68 @@ function RunExplorer() {
     <main className="dashboard">
       <section className="panel panel-header">
         <h1>Run Explorer</h1>
-        <div className="run-selector-row">
-          <label htmlFor="run-a-select">Run A</label>
-          <select
-            id="run-a-select"
-            value={selectedRun}
-            onChange={(event) => setSelectedRun(event.target.value)}
-            disabled={runsLoading || runs.length === 0}
-          >
-            {runs.map((run) => (
-              <option key={run.run_dir_name} value={run.run_dir_name}>
-                {run.run_dir_name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <RunSelector
+          id="run-a-select"
+          label="Run A"
+          value={selectedRun}
+          onChange={setSelectedRun}
+          disabled={runsLoading || runs.length === 0}
+          runs={runs}
+        />
       </section>
 
-      {runsLoading ? <p className="status">Loading runs...</p> : null}
-      {runsError ? <p className="status status-error">Error loading runs: {runsError}</p> : null}
-      {!runsLoading && !runsError && runs.length === 0 ? <p className="status">No runs available.</p> : null}
+      {runsLoading ? <StatusMessage>Loading runs...</StatusMessage> : null}
+      {runsError ? <StatusMessage error>Error loading runs: {runsError}</StatusMessage> : null}
+      {!runsLoading && !runsError && runs.length === 0 ? <StatusMessage>No runs available.</StatusMessage> : null}
 
-      {detailsLoading ? <p className="status">Loading selected run...</p> : null}
-      {detailsError ? (
-        <p className="status status-error">Error loading selected run: {detailsError}</p>
-      ) : null}
+      {detailsLoading ? <StatusMessage>Loading selected run...</StatusMessage> : null}
+      {detailsError ? <StatusMessage error>Error loading selected run: {detailsError}</StatusMessage> : null}
 
       {runDetails && !detailsLoading ? (
         <>
           <div className="panel-grid">
             <section className="panel">
               <h2>Metadata</h2>
-              <dl className="kv-grid">
-                <dt>run_id</dt>
-                <dd>{metadata.run_id ?? 'N/A'}</dd>
-                <dt>status</dt>
-                <dd>{metadata.status ?? 'N/A'}</dd>
-                <dt>started_at_utc</dt>
-                <dd>{metadata.started_at_utc ?? 'N/A'}</dd>
-                <dt>ended_at_utc</dt>
-                <dd>{metadata.ended_at_utc ?? 'N/A'}</dd>
-              </dl>
+              <KeyValueGrid
+                entries={[
+                  { key: 'run_id', label: 'run_id', value: metadata.run_id ?? 'N/A' },
+                  { key: 'status', label: 'status', value: metadata.status ?? 'N/A' },
+                  { key: 'started_at_utc', label: 'started_at_utc', value: metadata.started_at_utc ?? 'N/A' },
+                  { key: 'ended_at_utc', label: 'ended_at_utc', value: metadata.ended_at_utc ?? 'N/A' },
+                ]}
+              />
             </section>
 
             <section className="panel">
               <h2>Summary</h2>
-              <dl className="kv-grid">
-                <dt>max_speed_mps</dt>
-                <dd>{formatFixed(summary.max_speed_mps)}</dd>
-                <dt>avg_speed_mps</dt>
-                <dd>{formatFixed(summary.avg_speed_mps)}</dd>
-                <dt>total_collisions</dt>
-                <dd>{formatCount(summary.total_collisions)}</dd>
-                <dt>run_duration_s</dt>
-                <dd>{formatFixed(summary.run_duration_s)}</dd>
-                <dt>metric_row_count</dt>
-                <dd>{formatCount(summary.metric_row_count)}</dd>
-                <dt>event_count</dt>
-                <dd>{formatCount(summary.event_count)}</dd>
-              </dl>
+              <KeyValueGrid
+                entries={[
+                  { key: 'max_speed_mps', label: 'max_speed_mps', value: formatFixed(summary.max_speed_mps) },
+                  { key: 'avg_speed_mps', label: 'avg_speed_mps', value: formatFixed(summary.avg_speed_mps) },
+                  {
+                    key: 'total_collisions',
+                    label: 'total_collisions',
+                    value: formatCount(summary.total_collisions),
+                  },
+                  { key: 'run_duration_s', label: 'run_duration_s', value: formatFixed(summary.run_duration_s) },
+                  { key: 'metric_row_count', label: 'metric_row_count', value: formatCount(summary.metric_row_count) },
+                  { key: 'event_count', label: 'event_count', value: formatCount(summary.event_count) },
+                ]}
+              />
             </section>
           </div>
 
           <section className="panel panel-telemetry">
             <h2>Telemetry</h2>
 
-            <div className="metric-toggle-row">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={metricVisibility.speed_mps}
-                  onChange={() => toggleMetric('speed_mps')}
-                />
-                Speed
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={metricVisibility.throttle}
-                  onChange={() => toggleMetric('throttle')}
-                />
-                Throttle
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={metricVisibility.brake}
-                  onChange={() => toggleMetric('brake')}
-                />
-                Brake
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={metricVisibility.steering}
-                  onChange={() => toggleMetric('steering')}
-                />
-                Steering
-              </label>
-            </div>
+            <MetricToggleRow
+              metrics={EXPLORER_METRICS}
+              visibility={metricVisibility}
+              onToggle={toggleMetric}
+            />
 
             {chartData.length === 0 ? (
-              <p className="status">No metrics available for selected run.</p>
+              <StatusMessage>No metrics available for selected run.</StatusMessage>
             ) : (
               <div className="telemetry-chart-wrapper">
                 <LineChart
@@ -322,7 +242,7 @@ function RunExplorer() {
           <section className="panel">
             <h2>Event Timeline</h2>
             {sortedEvents.length === 0 ? (
-              <p className="status">No events found for this run.</p>
+              <StatusMessage>No events found for this run.</StatusMessage>
             ) : (
               <ul className="event-list">
                 {sortedEvents.map((event, index) => (
@@ -346,7 +266,7 @@ function RunExplorer() {
         </>
       ) : null}
 
-      {!selectedRun && !runsLoading ? <p className="status">No selected run.</p> : null}
+      {!selectedRun && !runsLoading ? <StatusMessage>No selected run.</StatusMessage> : null}
     </main>
   )
 }

@@ -1,102 +1,60 @@
-﻿# CARLA Observability Toolkit
-Work in progress.
+# CARLA Observability Toolkit
 
-An observability and telemetry system for the CARLA autonomous driving simulator, designed to capture, validate, and analyze simulation runs as reproducible datasets.
+CARLA Observability Toolkit captures CARLA simulation telemetry as run-scoped datasets and provides a React dashboard for exploration and comparison. Each run is persisted as structured artifacts so results can be validated, analyzed, and reviewed consistently.
 
-This project adds structured logging, metrics collection, and experiment instrumentation to CARLA simulation runs. The goal is to make simulation experiments easier to analyze, reproduce, and visualize.
+## Project Overview
 
-The toolkit transforms CARLA simulation runs into structured, validated datasets that can be analyzed, compared, and visualized.
+- Run-centric observability pipeline for CARLA simulation sessions
+- Structured artifacts per run (`metadata.json`, `metrics.csv`, `events.json`)
+- Flask API for run listing and run-detail loading
+- React dashboard UI for exploration and comparison
 
-The system is built around a run-centric data model, where each simulation execution produces a self-contained dataset that can be validated, analyzed, and visualized.
+## Run-Centric Pipeline
 
----
+Each simulation execution creates a self-contained run directory under `runs/`. These generated datasets are the source of truth for validation, summary statistics, and dashboard views.
 
-## Project Goals
+## Architecture
 
-The toolkit focuses on three main areas:
+![System Architecture](docs/images/architecture.png)
 
-- **Simulation Telemetry**
-  - Vehicle metrics (speed, acceleration, steering)
-  - Event logging (collisions, run lifecycle events)
-  - Sensor data summaries
+### Observability Pipeline
 
-- **Structured Logging**
-  - JSON event logs
-  - CSV metrics output
-  - Time-series compatible data
+Collectors publish telemetry and events through the bus, runtime components persist run artifacts, and the dashboard/API layer reads those artifacts for analysis and visualization. The pipeline is designed so raw run output and derived summaries stay aligned.
 
-- **Experiment Analysis**
-  - Run metadata tracking
-  - Dataset generation from simulation runs
-  - Visualization through a lightweight dashboard
+Current package/layout highlights:
 
----
+- `src/cot/bus` - pub/sub and metric bus infrastructure
+- `src/cot/carla` - CARLA-specific adapters and integration helpers
+- `src/cot/collectors` - telemetry and event collectors
+- `src/cot/config` - configuration models/loading
+- `src/cot/runtime` - run loading, summaries, and runtime orchestration
+- `dashboard/app.py` - Flask API + React build serving
+- `frontend/` - React + Vite dashboard source
 
-## Current Status
+## Run Artifacts
 
-Current development includes:
+Each run directory in `runs/` contains three primary artifacts:
 
-- Metric bus architecture
-- Event logging pipeline
-- CSV metrics export
-- Simulation run instrumentation
-- Dashboard prototype
+- `metadata.json` - run identity, timing, and high-level run state
+- `metrics.csv` - frame/time-series telemetry values for charting and analysis
+- `events.json` - ordered run events (for example lifecycle and collision events)
 
----
+## Why This Matters
 
-## System Architecture
+Run-scoped artifacts make experiments reproducible: the same inputs and outputs can be revisited later without rerunning CARLA. This also improves analysis quality by separating data collection from visualization, enabling consistent comparisons across runs and simplifying troubleshooting.
 
-The toolkit is organized as a run-centric observability pipeline:
+## Frontend and API Model
 
-![img.png](img.png)
+- Flask provides API endpoints:
+  - `GET /api/runs`
+  - `GET /api/runs/<run_dir_name>`
+- React app is built from `frontend/` into `frontend/dist`.
+- In single-server mode, Flask serves the built React app from `frontend/dist`.
+- Legacy Flask/Chart.js dashboard is deprecated and kept as fallback at `/legacy`.
 
-Primary modules:
+## Setup
 
-- `cot.core.metric_bus` – in-process pub/sub backbone
-- `cot.core.event_collector` – event ingestion
-- `cot.core.vehicle_metrics_collector` – vehicle telemetry
-- `cot.core.logger` – artifact persistence
-- `cot.core.run_data_loader` – artifact parsing
-- `cot.core.run_statistics` – run summary metrics
-- `cot.core.run_validator` – integrity validation
-
----
-
-## How It Works
-
-- **Collectors**
-  - Transform CARLA data into structured telemetry messages
-  - Include `run_id`, `frame`, `sim_time_s`
-
-- **MetricBus**
-  - Routes telemetry via topic-based pub/sub
-  - Decouples producers from consumers
-
-- **Logging**
-  - `RunLogger` writes:
-    - `metadata.json`
-    - `metrics.csv`
-    - `events.json`
-
-- **Run Artifacts**
-  - Self-contained datasets per run
-
-- **Validation**
-  - Ensures correctness and consistency across artifacts
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Python 3.10+
-- CARLA running on `localhost:2000`
-- Active ego/hero vehicle
-
----
-
-### Setup
+### Python
 
 ```powershell
 python -m venv .venv
@@ -104,168 +62,112 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
----
-
-# Running the Client
-Generate simulation runs interactively:
+### Frontend
 
 ```powershell
-python src/cot/client/run_controls_smoke.py
+cd frontend
+npm install
+npm run build
 ```
 
-### Controls
+## Running Modes
 
-- `F5` — start run
-- `F6` — stop run
+### Development Mode
 
-Stopping a run creates:
-```
-  runs/<run_dir>/
-  metadata.json
-  metrics.csv
-  events.json
-```
-
-### Example Output
-
-Each run produces:
-
-- metrics.csv
-- events.json
-- metadata.json
-
-## Validation
-
-Single Run
-
-```powershell
-python scripts/validate_run.py
-```
-
-Multi-run Smoke Test
-
-```powershell
-python scripts/validate_runs.py
-python scripts/validate_runs.py --last 3
-python scripts/validate_runs.py --all
-```
-
-Generating a Summary Report
-
-```powershell
-python scripts/generate_experiment_report.py <run_name>
-```
-
-Generates:
-- summary_report.json
-
----
-
-# Running the Web Dashboard
-
-The toolkit includes a lightweight web dashboard for visualizing and comparing runs.
-Start the Dashboard
+Terminal 1:
 
 ```powershell
 python dashboard/app.py
 ```
 
-Open in browser:
-`http://127.0.0.1:5000`
+Terminal 2:
 
----
+```powershell
+cd frontend
+npm run dev
+```
+
+Open the Vite localhost URL shown in terminal output.
+
+### Single-Server Demo Mode
+
+```powershell
+cd frontend
+npm run build
+cd ..
+python dashboard/app.py
+```
+
+Open `http://127.0.0.1:5000`.
 
 ## Dashboard Features
 
-# Run Selection
-- Select Run A from dropdown
-- Loads full dataset
+- Run Explorer page
+- Compare Runs page
+- Summary stats
+- Normalized telemetry charts
+- Event timeline
+- Side-by-side run comparison
+- Speed and control comparison charts
 
----
+## Testing
 
-## Metric Visualization
-- Time-series charts:
-  - Speed
-  - Acceleration
-  - Steering
-  - Throttle
-  - Brake
-- Toggle metric on/off
+```powershell
+python -m pytest -v
+python -m compileall src scripts dashboard tests
+```
 
----
+Useful validation/report commands:
 
-## Event Timeline
-- Displays ordered events
-- Sorted by simulation time
+```powershell
+python scripts/validate_run.py
+python scripts/validate_runs.py
+python scripts/validate_runs.py --last 3
+python scripts/validate_runs.py --all
+python scripts/generate_experiment_report.py <run_name>
+```
 
----
+## Demo Workflow
 
-## Summary Statistics
-- Max speed
-- Average speed
-- Total collisions
-- Run duration
-- Event counts
-
----
-
-## Run Comparison
-- Enable "Compare"
-- Select Run B
-- View:
-  - Side-by-side stats
-  - Delta values
-  - Overlaid charts
-
----
-
-## API Endpoints
-- `GET /api/runs`
-- `GET /api/runs/<run> → full run data`
-
----
-
-# Demo Workflow
-1. Start CARLA Server
-2. Run a client such as manual_control.py from the python examples in Carla. A vehicle needs to be spawned.
-3. Run the COT client via
+1. Install and use the official CARLA `0.10` release.
+2. Start the CARLA server with `start_carla_dev.bat` (or equivalent low-resolution development settings).
+3. Activate the virtual environment used for CARLA `PythonAPI/examples`.
+4. Run `manual_control.py` to spawn/control a vehicle.
+5. In a separate terminal, start the COT controls client:
 
 ```powershell
 python src/cot/client/run_controls_smoke.py
 ```
 
-4. Generate a run F5 to start the run and F6 to stop it.
-5. Validate
+6. Press `F5` to start run capture.
+7. Drive the vehicle in `manual_control.py` to generate telemetry.
+8. Press `F6` to stop run capture.
+9. Validate the latest run artifacts:
 
 ```powershell
 python scripts/validate_run.py
 ```
 
-6. View in dashboard
+10. Build and start the dashboard, then view results:
 
 ```powershell
+cd frontend
+npm run build
+cd ..
 python dashboard/app.py
 ```
 
----
+Open `http://127.0.0.1:5000`.
 
-## Road map
-- Real-time streaming
-- Advanced analytics
-- Multi-run comparisons
-- Reproducibility tooling
+Note: COT connects to CARLA over `localhost:2000` (default client settings: host `localhost`, port `2000`, timeout `10s`) and attaches to an existing active vehicle. The vehicle must exist and move to produce useful telemetry. `VehicleSpawner` is available for helper/spawn workflows, but the primary demo path currently uses `manual_control.py`.
 
----
+## Tech Stack
 
-# Tech Stack
 - Python
 - CARLA
 - Flask
-- Chart.js
+- React
+- Vite
+- Recharts
 - JSON / CSV
-
----
-
-# Author
-Cameron Basham
-Software Engineering Student
+- pytest

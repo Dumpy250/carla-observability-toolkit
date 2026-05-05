@@ -119,6 +119,20 @@ function RunExplorer() {
     }))
   }
 
+  const formatFixed = (value, digits = 3) => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return 'N/A'
+    }
+    return value.toFixed(digits)
+  }
+
+  const formatCount = (value) => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return 'N/A'
+    }
+    return Math.round(value).toString()
+  }
+
   const getEventBadgeClass = (eventType) => {
     const normalized = String(eventType ?? '')
       .trim()
@@ -140,7 +154,7 @@ function RunExplorer() {
   return (
     <main className="dashboard">
       <section className="panel panel-header">
-        <h1>React Dashboard (WIP)</h1>
+        <h1>Run Explorer</h1>
         <div className="run-selector-row">
           <label htmlFor="run-a-select">Run A</label>
           <select
@@ -188,17 +202,17 @@ function RunExplorer() {
               <h2>Summary</h2>
               <dl className="kv-grid">
                 <dt>max_speed_mps</dt>
-                <dd>{summary.max_speed_mps ?? 'N/A'}</dd>
+                <dd>{formatFixed(summary.max_speed_mps)}</dd>
                 <dt>avg_speed_mps</dt>
-                <dd>{summary.avg_speed_mps ?? 'N/A'}</dd>
+                <dd>{formatFixed(summary.avg_speed_mps)}</dd>
                 <dt>total_collisions</dt>
-                <dd>{summary.total_collisions ?? 'N/A'}</dd>
+                <dd>{formatCount(summary.total_collisions)}</dd>
                 <dt>run_duration_s</dt>
-                <dd>{summary.run_duration_s ?? 'N/A'}</dd>
+                <dd>{formatFixed(summary.run_duration_s)}</dd>
                 <dt>metric_row_count</dt>
-                <dd>{summary.metric_row_count ?? 'N/A'}</dd>
+                <dd>{formatCount(summary.metric_row_count)}</dd>
                 <dt>event_count</dt>
-                <dd>{summary.event_count ?? 'N/A'}</dd>
+                <dd>{formatCount(summary.event_count)}</dd>
               </dl>
             </section>
           </div>
@@ -322,7 +336,7 @@ function RunExplorer() {
                     <span>frame: {event.frame ?? 'N/A'}</span>
                     <span>
                       sim_time_s:{' '}
-                      {typeof event.sim_time_s === 'number' ? event.sim_time_s : 'N/A'}
+                      {formatFixed(event.sim_time_s)}
                     </span>
                   </li>
                 ))}

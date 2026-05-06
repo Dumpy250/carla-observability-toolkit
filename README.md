@@ -19,7 +19,7 @@ Each simulation execution creates a self-contained run directory under `runs/`. 
 
 ### Observability Pipeline
 
-Collectors publish telemetry and events through the bus, runtime components persist run artifacts, and the dashboard/API layer reads those artifacts for analysis and visualization. The pipeline is designed so raw run output and derived summaries stay aligned.
+Collectors publish telemetry and events through the bus, runtime components persist run artifacts, and the backend/API layer reads those artifacts for analysis and visualization. The pipeline is designed so raw run output and derived summaries stay aligned.
 
 Current package/layout highlights:
 
@@ -28,7 +28,7 @@ Current package/layout highlights:
 - `src/cot/collectors` - telemetry and event collectors
 - `src/cot/config` - configuration models/loading
 - `src/cot/runtime` - run loading, summaries, and runtime orchestration
-- `dashboard/app.py` - Flask API + React build serving
+- `backend/app.py` - Flask API + React build serving
 - `frontend/` - React + Vite dashboard source
 
 ## Run Artifacts
@@ -77,7 +77,7 @@ npm run build
 Terminal 1:
 
 ```powershell
-python dashboard/app.py
+python backend/app.py
 ```
 
 Terminal 2:
@@ -95,7 +95,7 @@ Open the Vite localhost URL shown in terminal output.
 cd frontend
 npm run build
 cd ..
-python dashboard/app.py
+python backend/app.py
 ```
 
 Open `http://127.0.0.1:5000`.
@@ -114,7 +114,7 @@ Open `http://127.0.0.1:5000`.
 
 ```powershell
 python -m pytest -v
-python -m compileall src scripts dashboard tests
+python -m compileall src scripts backend tests
 ```
 
 Useful validation/report commands:
@@ -154,7 +154,7 @@ python scripts/validate_run.py
 cd frontend
 npm run build
 cd ..
-python dashboard/app.py
+python backend/app.py
 ```
 
 Open `http://127.0.0.1:5000`.

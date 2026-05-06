@@ -53,6 +53,7 @@ class RunControlApp:
         self._collector_session: CollectorSession | None = None
 
     def run(self) -> None:
+        print("COT controls ready. Focus the pygame window. F5=start, F6=stop, F7=abort, F8=tag, ESC=quit.")
         running = True
         try:
             while running:
@@ -91,6 +92,7 @@ class RunControlApp:
 
     def _start_run(self) -> None:
         if self._run_manager.is_running():
+            print("RUN start ignored: run already active.")
             return
         try:
             config = load_experiment_config(self._experiment_config_path)
@@ -190,6 +192,7 @@ class RunControlApp:
 
     def _stop_run(self) -> None:
         if not self._run_manager.is_running():
+            print("RUN stop ignored: no active run.")
             return
         state = self._run_manager.stop_run()
         self._dashboard.set_run(state.status, state.run_id)
@@ -205,6 +208,7 @@ class RunControlApp:
 
     def _abort_run(self) -> None:
         if not self._run_manager.is_running():
+            print("RUN abort ignored: no active run.")
             return
         state = self._run_manager.abort_run(reason="keyboard_abort")
         self._dashboard.set_run(state.status, state.run_id)
@@ -219,15 +223,22 @@ class RunControlApp:
         print(f"RUN aborted id={state.run_id} reason={state.abort_reason}")
 
     def _tag_run(self) -> None:
+        if not self._run_manager.is_running():
+            print("TAG ignored: no active run.")
+            self._dashboard.push_manual_event("tag ignored", alert_text="TAG IGNORED")
+            return
         user_input = input("Enter tag key=value: ")
         parsed = _parse_key_value(user_input)
         if parsed is None:
+            print("TAG ignored: expected key=value.")
+            self._dashboard.push_manual_event("tag ignored", alert_text="TAG IGNORED")
             return
         key, value = parsed
         state = self._run_manager.tag(key, value)
         if self._logger is not None:
             self._logger.update_metadata(asdict(state))
-        print(f"TAG {key}={value}")
+        self._dashboard.push_manual_event(f"tag {key}={value}", alert_text="TAG ADDED")
+        print(f"TAG added {key}={value}")
 
     def _stop_collectors(self) -> None:
         if self._collector_session is not None:
@@ -252,8 +263,11 @@ class RunControlApp:
 
 
 def _parse_key_value(user_input: str) -> tuple[str, str] | None:
-    if "=" not in user_input:
+    user_input = user_input.strip()
+    if not user_input:
         return None
+    if "=" not in user_input:
+        return "note", user_input
     key, value = user_input.split("=", 1)
     key = key.strip()
     value = value.strip()

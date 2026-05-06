@@ -10,6 +10,7 @@ from cot.client.dashboard_state import DEFAULT_ALERT_DURATION_S
 from cot.client.dashboard_state import RECENT_EVENT_LIMIT
 
 ALERT_BANNERS_VISIBLE = 2
+HOTKEY_HELP_TEXT = "F5 Start | F6 Stop | F7 Abort | F8 Tag | Esc Quit"
 
 
 def _truncate_middle(value: str, keep: int = 8) -> str:
@@ -88,8 +89,10 @@ def _draw_header(
 ) -> None:
     title_surface = title_font.render("CARLA Observability Toolkit", True, (228, 233, 241))
     subtitle_surface = label_font.render("Client Telemetry Dashboard", True, (150, 164, 186))
+    controls_surface = label_font.render(HOTKEY_HELP_TEXT, True, (174, 188, 211))
     screen.blit(title_surface, (14, 10))
     screen.blit(subtitle_surface, (14, 34))
+    screen.blit(controls_surface, (14, 54))
 
 
 def _draw_run_panel(
@@ -219,9 +222,9 @@ def render_dashboard(
     _draw_header(screen, title_font, label_font)
 
     panel_width = screen.get_width() - 24
-    run_panel = pygame.Rect(12, 70, panel_width, 156)
-    metrics_panel = pygame.Rect(12, 244, panel_width, 94)
-    events_panel = pygame.Rect(12, 356, panel_width, 98)
+    run_panel = pygame.Rect(12, 84, panel_width, 150)
+    metrics_panel = pygame.Rect(12, 246, panel_width, 92)
+    events_panel = pygame.Rect(12, 350, panel_width, 104)
 
     _draw_run_panel(
         screen=screen,

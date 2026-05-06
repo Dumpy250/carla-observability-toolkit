@@ -9,6 +9,43 @@ CARLA Observability Toolkit captures CARLA simulation telemetry as run-scoped da
 - Flask API for run listing and run-detail loading
 - React dashboard UI for exploration and comparison
 
+## Repository Layout
+
+- `frontend/` - React + Vite dashboard source
+- `backend/` - Flask API + React production host (`backend/app.py`)
+- `src/cot/` - observability/runtime pipeline
+- `scripts/` - validation and report utilities
+- `runs/` - generated run artifacts
+
+## Quick Start
+
+Most common end-to-end demo flow:
+
+1. Start CARLA server.
+2. Run CARLA `manual_control.py`.
+3. In another terminal, run:
+
+```powershell
+python src/cot/client/run_controls_smoke.py
+```
+
+4. Press `F5` to start capture, drive, then press `F6` to stop capture.
+5. Build the frontend:
+
+```powershell
+cd frontend
+npm run build
+cd ..
+```
+
+6. Start the backend service:
+
+```powershell
+python backend/app.py
+```
+
+Open `http://127.0.0.1:5000`.
+
 ## Run-Centric Pipeline
 
 Each simulation execution creates a self-contained run directory under `runs/`. These generated datasets are the source of truth for validation, summary statistics, and dashboard views.
@@ -39,7 +76,7 @@ Each run directory in `runs/` contains three primary artifacts:
 - `metrics.csv` - frame/time-series telemetry values for charting and analysis
 - `events.json` - ordered run events (for example lifecycle and collision events)
 
-## Why This Matters
+## Reproducibility and Analysis
 
 Run-scoped artifacts make experiments reproducible: the same inputs and outputs can be revisited later without rerunning CARLA. This also improves analysis quality by separating data collection from visualization, enabling consistent comparisons across runs and simplifying troubleshooting.
 
@@ -50,7 +87,7 @@ Run-scoped artifacts make experiments reproducible: the same inputs and outputs 
   - `GET /api/runs/<run_dir_name>`
 - React app is built from `frontend/` into `frontend/dist`.
 - In single-server mode, Flask serves the built React app from `frontend/dist`.
-- Legacy Flask/Chart.js dashboard is deprecated and kept as fallback at `/legacy`.
+- Legacy Flask/Chart.js dashboard is deprecated and available only as fallback at `/legacy`.
 
 ## Setup
 
@@ -110,6 +147,31 @@ Open `http://127.0.0.1:5000`.
 - Side-by-side run comparison
 - Speed and control comparison charts
 
+## Dashboard Preview
+![Dashboard Preview](docs/images/Dashboard_preview.png)
+
+Features shown:
+- Telemetry visualization
+- Event timeline
+- Run metadata and summary statistics
+- Normalized time-series charts
+
+### Run Explorer
+![Run Explorer](docs/images/Run_explorer_preview.png)
+
+### Compare Runs
+![Compare Runs](docs/images/Compare_runs_preview1.png)
+![Compare Runs](docs/images/Compare_runs_preview2.png)
+
+Features shown:
+- Side-by-side run comparison
+- Delta analysis
+- Speed comparison charts
+- Control input comparison charts
+
+## Normalization
+
+- Telemetry charts normalize simulation time per run so comparisons begin at t=0 regardless of CARLA world uptime.
 ## Testing
 
 ```powershell
@@ -148,7 +210,7 @@ python src/cot/client/run_controls_smoke.py
 python scripts/validate_run.py
 ```
 
-10. Build and start the dashboard, then view results:
+10. Build the frontend and start the backend service, then view results:
 
 ```powershell
 cd frontend

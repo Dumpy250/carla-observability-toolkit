@@ -107,9 +107,7 @@ class DashboardState:
         event_line = f"{event_type} @ {frame_value if frame_value is not None else '?'}"
 
         with self._lock:
-            self.events.insert(0, event_line)
-            if len(self.events) > RECENT_EVENT_LIMIT:
-                self.events = self.events[:RECENT_EVENT_LIMIT]
+            self._push_event_line_locked(event_line)
             if event_type == "collision":
                 self._upsert_alert_locked(
                     key="collision",
@@ -124,6 +122,22 @@ class DashboardState:
                     color=(230, 193, 107),
                     duration_s=LANE_INVASION_ALERT_DURATION_S,
                 )
+
+    def push_manual_event(self, text: str, alert_text: Optional[str] = None) -> None:
+        with self._lock:
+            self._push_event_line_locked(text)
+            if alert_text:
+                self._upsert_alert_locked(
+                    key="manual_event",
+                    text=alert_text,
+                    color=(86, 214, 128),
+                    duration_s=DEFAULT_ALERT_DURATION_S,
+                )
+
+    def _push_event_line_locked(self, event_line: str) -> None:
+        self.events.insert(0, event_line)
+        if len(self.events) > RECENT_EVENT_LIMIT:
+            self.events = self.events[:RECENT_EVENT_LIMIT]
 
     def _upsert_alert_locked(
         self,

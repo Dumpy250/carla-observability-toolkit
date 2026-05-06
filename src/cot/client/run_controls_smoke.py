@@ -39,11 +39,24 @@ def main() -> None:
     speed_metric_font = pygame.font.Font(None, 30)
     clock = pygame.time.Clock()
 
-    client = make_client()
-    world = client.get_world()
+    try:
+        client = make_client()
+        world = client.get_world()
+    except Exception:
+        print("ERROR: Could not reach CARLA at localhost:2000.")
+        print("Start the CARLA server first.")
+        print("Then run manual_control.py (or spawn a vehicle), and rerun:")
+        print("python src/cot/client/run_controls_smoke.py")
+        pygame.quit()
+        raise SystemExit(1)
+
     vehicle = _pick_vehicle(world)
     if vehicle is None:
-        raise RuntimeError("No vehicle actors found in the CARLA world.")
+        print("ERROR: Connected to CARLA, but no vehicle actors were found.")
+        print("Start manual_control.py (or spawn a vehicle) first, then rerun:")
+        print("python src/cot/client/run_controls_smoke.py")
+        pygame.quit()
+        raise SystemExit(1)
 
     app = RunControlApp(
         world=world,

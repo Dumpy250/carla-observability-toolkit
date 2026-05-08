@@ -85,6 +85,7 @@ Run-scoped artifacts make experiments reproducible: the same inputs and outputs 
 - Flask provides API endpoints:
   - `GET /api/runs`
   - `GET /api/runs/<run_dir_name>`
+- API documentation: [`docs/API.md`](docs/API.md)
 - React app is built from `frontend/` into `frontend/dist`.
 - In single-server mode, Flask serves the built React app from `frontend/dist`.
 - Legacy Flask/Chart.js dashboard is deprecated and available only as fallback at `/legacy`.
@@ -188,6 +189,7 @@ python scripts/validate_runs.py --last 3
 python scripts/validate_runs.py --all
 python scripts/generate_experiment_report.py <run_name>
 ```
+[`docs/TestPlan.md`](docs/TestPlan.md)
 
 ## Demo Workflow
 
